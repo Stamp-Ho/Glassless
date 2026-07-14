@@ -1,4 +1,3 @@
-<!-- src/views/HomeView.vue -->
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
@@ -6,20 +5,37 @@ import { useRouter } from 'vue-router';
 const router = useRouter();
 const previewPosts = ref([]);
 
-onMounted(() => {
-  const savedPosts = localStorage.getItem('localhub_posts');
-  if (savedPosts) {
-    // 깔끔하게 딱 4개만 필터링하여 노출
-    previewPosts.value = JSON.parse(savedPosts).slice(0, 4);
-  } else {
-    const dummy = [
-      { id: 1, title: '부산 광안리 드론쇼 명당 공유', location: '부산 수영구', desc: '여기 카페 2층 테라스가 숨겨진 뷰 맛집입니다.' },
-      { id: 2, title: '경주 황리단길 주차 꿀팁', location: '경북 경주시', desc: '주말에는 공영주차장 말고 이 골목을 이용해보세요.' },
-      { id: 3, title: '제주 애월읍 노을 숨은 포인트', location: '제주 애월읍', desc: '해안도로 끝자락 붉은 등대 옆이 제일 예쁩니다.' },
-      { id: 4, title: '서울 성수동 조용한 북카페', location: '서울 성동구', desc: '골목 깊은 곳에 있어 작업하기 아주 좋습니다.' }
-    ];
-    previewPosts.value = dummy;
-    localStorage.setItem('localhub_posts', JSON.stringify(dummy));
+// .env 파일에 정의된 전역 환경 변수 가져오기 (https://glassless-be.onrender.com)
+const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+onMounted(async () => {
+  try {
+    // 1. 전체 게시물 목록 엔드포인트로 단일 요청 전송
+    const response = await fetch(`${BASE_URL}/api/posts`);
+
+    // 2. 422 Validation Error 발생 시 아무것도 출력 안 하도록 빈 배열 처리 후 종료
+    if (response.status === 422) {
+      previewPosts.value = [];
+      return;
+    }
+
+    if (!response.ok) {
+      throw new Error('네트워크 응답 불안정');
+    }
+
+    const allPosts = await response.json();
+
+    // 3. 받아온 배열 데이터가 유효하다면 상위 4개만 슬라이스(slice)하여 바인딩
+    if (Array.isArray(allPosts)) {
+      previewPosts.value = allPosts.slice(0, 4);
+    } else {
+      previewPosts.value = [];
+    }
+
+  } catch (error) {
+    // 통신 실패 혹은 예외 상황 시 화면에 에러를 노출하지 않고 조용히 빈 화면 처리
+    console.error("데이터 로드 실패 (422 처리 포함):", error);
+    previewPosts.value = [];
   }
 });
 
@@ -30,25 +46,21 @@ const goToPostList = () => {
 
 <template>
   <main class="home-page">
-    <!-- 1. 상단 미니 맵 영역 (레이아웃 전면 축소 및 컴팩트화) -->
     <section class="hero-map-section">
       <div class="map-preview">
-        <!-- 왼쪽 상단에 고정된 작고 모던한 블랙 버튼 -->
         <button class="btn-map-sm" @click="router.push('/map')">
           📍 지도에서 찾기
         </button>
       </div>
     </section>
 
-    <!-- 2. 하단 게시물 가로 스크롤 카드 프리뷰 (마지막 액션 카드 제거) -->
-    <section class="preview-section">
+    <section v-if="previewPosts.length > 0" class="preview-section">
       <div class="section-header">
         <h2 class="section-title">최신 추천 지역 정보</h2>
         <span class="view-all" @click="goToPostList">모두 보기 &rarr;</span>
       </div>
 
       <div class="slider-container no-scrollbar">
-        <!-- 순수하게 Vue 아이템 카드 4개만 깔끔하게 노출 -->
         <div 
           v-for="post in previewPosts" 
           :key="post.id" 
@@ -56,11 +68,11 @@ const goToPostList = () => {
           @click="goToPostList"
         >
           <div class="card-image-placeholder">
-            <span class="badge">{{ post.location }}</span>
+            <span class="badge">{{ post.region || '지역 정보 없음' }}</span>
           </div>
           <div class="card-info">
             <h3 class="card-title">{{ post.title }}</h3>
-            <p class="card-desc">{{ post.desc }}</p>
+            <p class="card-desc">{{ post.content }}</p>
           </div>
         </div>
       </div>
@@ -73,10 +85,9 @@ const goToPostList = () => {
   padding-bottom: 80px;
 }
 
-/* 상단 지도 영역 스타일 구조조정 */
 .hero-map-section {
   width: 100%;
-  height: 320px; /* 불필요한 시각적 피로감을 줄이기 위해 높이 축소 */
+  height: 320px;
   background-color: #E3ECE9;
   position: relative;
   overflow: hidden;
@@ -91,12 +102,11 @@ const goToPostList = () => {
   position: relative;
 }
 
-/* 지도의 왼쪽 상단(Top-Left)에 배치되는 미니멀한 검정 버튼 */
 .btn-map-sm {
   position: absolute;
   top: 24px;
   left: 24px;
-  background-color: var(--color-airbnb-dark); /* 세련된 검정색 */
+  background-color: var(--color-airbnb-dark);
   color: white;
   border: none;
   padding: 10px 18px;
@@ -113,7 +123,6 @@ const goToPostList = () => {
   transform: translateY(-1px);
 }
 
-/* 하단 카드 프리뷰 래퍼 */
 .preview-section {
   max-width: 1200px;
   margin: 40px auto 0;
@@ -149,7 +158,7 @@ const goToPostList = () => {
 }
 
 .preview-card {
-  flex: 0 0 calc(25% - 15px); /* 화면이 넓을 때 한눈에 4개가 안정적으로 들어오도록 조절 */
+  flex: 0 0 calc(25% - 15px);
   min-width: 260px;
   background-color: white;
   border: 1px solid var(--color-border);
@@ -162,7 +171,7 @@ const goToPostList = () => {
 
 @media (max-width: 1100px) {
   .preview-card {
-    flex: 0 0 280px; /* 화면이 작아지면 자연스럽게 가로 스크롤 활성화 */
+    flex: 0 0 280px;
   }
 }
 
