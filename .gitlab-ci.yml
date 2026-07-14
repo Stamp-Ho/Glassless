@@ -1,0 +1,49 @@
+stages:
+  - test
+  - deploy
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  paths:
+    - .cache/pip
+
+test_be:
+  stage: test
+  image: python:3.11
+  rules:
+    - changes:
+        - BE/**
+        - render.yaml
+        - .gitlab-ci.yml
+  before_script:
+    - python -m pip install --upgrade pip
+    - pip install -r BE/src/requirements.txt
+  script:
+    - python -m compileall BE/src/app BE/src/scripts
+    - python - << 'PY'
+import sys
+sys.path.insert(0, 'BE/src')
+from app.main import app
+print('APP_TITLE=', app.title)
+PY
+
+deploy_render:
+  stage: deploy
+  image: curlimages/curl:8.10.1
+  needs:
+    - job: test_be
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - BE/**
+        - render.yaml
+        - .gitlab-ci.yml
+  script:
+    - |
+      if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+        echo "RENDER_DEPLOY_HOOK_URL is not set."
+        exit 1
+      fi
+    - curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL"

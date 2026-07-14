@@ -10,6 +10,7 @@
 - [04 API 구현 가이드 (posts/chat)](./04_api_implementation.md)
 - [05 보안 및 운영 제약 체크리스트](./05_security_and_constraints.md)
 - [06 개발 워크플로우 및 배포](./06_workflow_and_deploy.md)
+- [07 Render CI/CD 준비](./07_render_cicd.md)
 
 ## MVP 원칙
 
