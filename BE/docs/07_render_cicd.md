@@ -14,9 +14,10 @@
 - Build Command: `pip install -r src/requirements.txt`
 - Start Command: `python -m uvicorn app.main:app --app-dir src --host 0.0.0.0 --port $PORT`
 - Health Check Path: `/health`
-- Persistent Disk:
-  - mount path: `/var/data`
-  - DB 경로: `sqlite+aiosqlite:////var/data/localhub.db`
+- Free 플랜 제약:
+  - `disk`는 지원되지 않음
+  - DB 경로: `sqlite+aiosqlite:////tmp/localhub.db` (임시 저장소)
+  - 재배포/재시작 시 DB 데이터가 유실될 수 있음
 
 ## 3) GitLab CI/CD 파이프라인
 
@@ -68,4 +69,5 @@
   - Render Blueprint가 `render.yaml`을 읽는지 확인
   - Render 로그에서 build/start command 에러 확인
 - DB 초기화 이슈:
-  - 디스크 mount path(`/var/data`)와 `DATABASE_URL` 일치 여부 확인
+  - Free 플랜은 디스크 미지원이므로 `DATABASE_URL`이 `/tmp` 경로를 사용하는지 확인
+  - 데이터 영속화가 필요하면 Starter 이상 플랜에서 disk 설정 사용
