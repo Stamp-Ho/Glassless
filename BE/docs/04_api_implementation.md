@@ -73,5 +73,26 @@
 
 - `routers/posts.py`
 - `routers/chat.py`
+- `routers/locations.py`
 - `APIRouter(prefix="/posts", tags=["posts"])`
 - `APIRouter(prefix="/chat", tags=["chat"])`
+
+## 5) Locations API (원천 데이터 조회)
+
+### GET `/api/locations`
+
+- 권역/카테고리/키워드 기반 조회
+- 페이지네이션 지원: `limit`, `offset`
+
+쿼리 파라미터:
+
+- `region`: 예) `서울`, `부산`, `광주_전라권`, `구미_경북권`, `대전_충청권`
+- `category`: 예) `관광지`, `레포츠`, `문화시설`, `쇼핑`, `숙박`, `여행코스`, `음식점`, `축제공연행사`
+- `keyword`: 이름/주소/content_id 부분 검색
+- `limit`: 기본 20, 최대 100
+- `offset`: 기본 0
+
+### GET `/api/locations/{location_id}`
+
+- 단건 상세 조회
+- 없으면 404

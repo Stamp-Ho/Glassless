@@ -36,18 +36,20 @@
 
 `src/scripts/migrate.py`에서 다음 순서를 지킵니다.
 
-1. `BE/data/*.json` 파일 로드
+1. `BE/data/<권역>/*.json` 파일 자동 탐색/로드
 2. 카테고리/지역/설명 필드 정규화
 3. `Location` 테이블로 bulk insert
-4. 중복 레코드 방지(이름+주소+카테고리 기준)
+4. 중복 레코드 방지(`content_id + name` 기준)
 
 ## 5) 실행 예시
 
 ```bash
-python -m src.scripts.migrate
+cd BE/src
+python -m scripts.migrate
 ```
 
 ## 6) 주의사항
 
 - 하드코딩된 DB 경로 금지, 반드시 `DATABASE_URL` 환경변수 사용
 - 대용량 JSON 처리 시 메모리 사용량 고려(파일 단위 처리)
+- 현재 데이터 폴더 기준 `서울`, `부산` 권역은 `음식점` JSON이 없어 해당 카테고리 응답이 비어 있을 수 있음

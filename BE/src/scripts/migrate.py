@@ -8,7 +8,7 @@ from app.core.database import SessionLocal, init_db
 from app.models.location import Location
 
 BASE_DIR = Path(__file__).resolve().parents[2]
-SEOUL_DATA_DIR = BASE_DIR / "data" / "서울"
+DATA_DIR = BASE_DIR / "data"
 
 
 def _to_float(value: str | None) -> float | None:
@@ -32,12 +32,21 @@ def _combine_address(addr1: str | None, addr2: str | None) -> str | None:
     return None
 
 
-async def migrate_seoul() -> None:
+def _discover_region_json_files() -> list[Path]:
+    files: list[Path] = []
+    for region_dir in sorted(DATA_DIR.iterdir()):
+        if not region_dir.is_dir():
+            continue
+        files.extend(sorted(region_dir.glob("*.json")))
+    return files
+
+
+async def migrate_locations() -> None:
     await init_db()
 
-    files = sorted(SEOUL_DATA_DIR.glob("서울_*.json"))
+    files = _discover_region_json_files()
     if not files:
-        print("No Seoul JSON files found.")
+        print("No JSON files found under data directory.")
         return
 
     inserted = 0
@@ -90,8 +99,8 @@ async def migrate_seoul() -> None:
 
         await session.commit()
 
-    print(f"Migration complete. inserted={inserted}, skipped={skipped}")
+    print(f"Migration complete. files={len(files)}, inserted={inserted}, skipped={skipped}")
 
 
 if __name__ == "__main__":
-    asyncio.run(migrate_seoul())
+    asyncio.run(migrate_locations())
