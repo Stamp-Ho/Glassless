@@ -9,11 +9,13 @@ from app.core.database import init_db
 from app.routers.chat import router as chat_router
 from app.routers.locations import router as locations_router
 from app.routers.posts import router as posts_router
+from scripts.migrate import seed_locations_if_empty
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    await seed_locations_if_empty()
     yield
 
 

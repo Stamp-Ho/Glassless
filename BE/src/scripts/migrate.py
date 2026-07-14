@@ -2,7 +2,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.database import SessionLocal, init_db
 from app.models.location import Location
@@ -100,6 +100,20 @@ async def migrate_locations() -> None:
         await session.commit()
 
     print(f"Migration complete. files={len(files)}, inserted={inserted}, skipped={skipped}")
+
+
+async def seed_locations_if_empty() -> None:
+    await init_db()
+
+    async with SessionLocal() as session:
+        result = await session.execute(select(func.count(Location.id)))
+        count = result.scalar_one() or 0
+
+    if count > 0:
+        print(f"Location table already seeded. count={count}")
+        return
+
+    await migrate_locations()
 
 
 if __name__ == "__main__":

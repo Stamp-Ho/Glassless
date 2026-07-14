@@ -19,6 +19,9 @@
   - DB 경로: `sqlite+aiosqlite:////tmp/localhub.db` (임시 저장소)
   - 재배포/재시작 시 DB 데이터가 유실될 수 있음
 
+앱 시작 시 `locations` 테이블이 비어 있으면 `BE/data/<권역>/*.json`을 자동 적재합니다.
+따라서 Render 환경에서 별도 수동 마이그레이션 없이도 원천 데이터가 API로 연결됩니다.
+
 ## 3) GitLab CI/CD 파이프라인
 
 `.gitlab-ci.yml`은 아래 두 단계를 수행합니다.

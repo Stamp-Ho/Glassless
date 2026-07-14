@@ -79,6 +79,8 @@
 
 ## 5) Locations API (원천 데이터 조회)
 
+이 API는 서버 시작 시 `BE/data/<권역>/*.json`에서 적재된 `Location` 테이블을 조회합니다.
+
 ### GET `/api/locations`
 
 - 권역/카테고리/키워드 기반 조회
