@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     chat_max_query_length: int = Field(default=500, ge=20, le=5000)
     chat_max_references: int = Field(default=10, ge=1, le=30)
 
+    rating_cooldown_hours: int = Field(default=24, ge=1, le=168)
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

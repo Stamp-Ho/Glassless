@@ -84,6 +84,7 @@
 ## 5) Locations API (원천 데이터 조회)
 
 이 API는 서버 시작 시 `BE/data/<권역>/*.json`에서 적재된 `Location` 테이블을 조회합니다.
+응답에는 별점 평균(`rating_avg`)과 별점 개수(`rating_count`)가 포함됩니다.
 
 ### GET `/api/locations`
 
@@ -102,3 +103,24 @@
 
 - 단건 상세 조회
 - 없으면 404
+
+### POST `/api/locations/{location_id}/ratings`
+
+- 명소 별점 등록
+- 요청 바디:
+
+```json
+{
+	"score": 5,
+	"client_id": "localstorage-uuid"
+}
+```
+
+- 제한:
+	- 점수는 1~5점
+	- IP + User-Agent + `client_id` 조합으로 24시간 내 중복 제출 방지
+	- 중복 제출 시 429 반환
+- 응답:
+	- 저장된 rating 정보
+	- 최신 `rating_avg`
+	- 최신 `rating_count`
