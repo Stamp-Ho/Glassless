@@ -1,18 +1,19 @@
+<!-- src/components/CommonHeader.vue -->
 <template>
   <header class="header">
     <div class="header-container">
+      <!-- 서비스 이름 (GlassLESS - 더 단단하고 세련된 굵기로 수정) -->
       <h1 class="logo" @click="$router.push('/')">Glass<span>LESS</span></h1>
       
+      <!-- 정돈된 중앙 네비게이션 바 -->
       <nav class="nav-tabs">
-        <router-link to="/" class="nav-item" active-class="active">명소 검색</router-link>
-        <router-link to="/posts" class="nav-item" active-class="active">게시물 보기</router-link>
-        <router-link to="/map" class="nav-item" active-class="active">지도</router-link>
+        <router-link to="/" class="nav-item" active-class="active">메인</router-link>
+        <router-link to="/posts" class="nav-item" active-class="active">게시물 목록</router-link>
+        <router-link to="/map" class="nav-item" active-class="active">지도 검색</router-link>
       </nav>
       
-      <div class="user-menu">
-        <span class="menu-item">호스트 되기</span>
-        <div class="profile-icon">👤</div>
-      </div>
+      <!-- 우측 여백 보정용 스페이서 -->
+      <div class="header-right-spacer"></div>
     </div>
   </header>
 </template>
@@ -32,22 +33,23 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 24px;
+  padding: 16px 24px;
 }
 
+/* 로고 글씨체를 더 굵고 직관적으로 개선 */
 .logo {
   font-size: 1.6rem;
-  font-weight: 800;
+  font-weight: 800; /* 존재감 있는 볼드체 */
   color: var(--color-airbnb-red);
   cursor: pointer;
-  letter-spacing: -1px;
+  letter-spacing: -0.8px;
 }
 
 .logo span {
+  font-weight: 400; /* LESS 부분도 적당히 균형 잡힌 두께로 조절 */
   color: var(--color-airbnb-dark);
 }
 
-/* 네비게이션 바 디자인 */
 .nav-tabs {
   display: flex;
   gap: 32px;
@@ -55,7 +57,7 @@
 
 .nav-item {
   text-decoration: none;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 500;
   color: var(--color-airbnb-gray);
   padding: 8px 4px;
@@ -67,44 +69,27 @@
   color: var(--color-airbnb-dark);
 }
 
-/* 에어비앤비 스타일 밑줄 활성화 */
+/* 선택된 메뉴의 글자 색상을 시그니처 레드로 변경 */
 .nav-item.active {
-  color: var(--color-airbnb-dark);
-  font-weight: 600;
+  color: var(--color-airbnb-red);
+  font-weight: 700;
 }
 
 .nav-item.active::after {
   content: '';
   position: absolute;
-  bottom: -4px;
+  bottom: -18px;
   left: 0;
   width: 100%;
   height: 2px;
-  background-color: var(--color-airbnb-dark);
+  background-color: var(--color-airbnb-red); /* 하단 바 색상도 레드로 통일 */
 }
 
-.user-menu {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+.header-right-spacer {
+  width: 120px;
 }
 
-.menu-item {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--color-airbnb-dark);
-  cursor: pointer;
-}
-
-.profile-icon {
-  width: 36px;
-  height: 36px;
-  border: 1px solid var(--color-border);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.9rem;
-  cursor: pointer;
+@media (max-width: 768px) {
+  .header-right-spacer { display: none; }
 }
 </style>

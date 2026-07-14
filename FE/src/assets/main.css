@@ -1,11 +1,11 @@
 /* src/assets/main.css */
 :root {
-  --color-airbnb-red: #FF385C;    /* 에어비앤비 시그니처 Rauz */
-  --color-airbnb-dark: #222222;   /* 부드러운 블랙 */
-  --color-airbnb-gray: #717171;   /* 가독성 좋은 회색 */
-  --color-bg-light: #FFFFFF;      /* 깨끗한 화이트 배경 */
-  --color-border: #DDDDDD;        /* 연한 경계선 */
-  --radius-airbnb: 12px;          /* 에어비앤비 스타일 둥근 모서리 */
+  --color-airbnb-red: #E01A4F;    /* 기존보다 한 층 더 진하고 고급스러운 레드 */
+  --color-airbnb-dark: #222222;   /* 깊은 블랙 */
+  --color-airbnb-gray: #717171;   /* 가독성 좋은 부드러운 회색 */
+  --color-bg-light: #FAFAFA;      /* 깨끗하고 눈이 편안한 밝은 배경 */
+  --color-border: #EBEBEB;        /* 더 연하고 미니멀한 경계선 */
+  --radius-airbnb: 16px;          /* 둥근 느낌을 살린 모서리 */
   --font-apple: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -20,21 +20,14 @@ body {
   background-color: var(--color-bg-light);
   color: var(--color-airbnb-dark);
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* 에어비앤비 스타일 버튼 */
-.btn-airbnb {
-  background-color: var(--color-airbnb-red);
-  color: white;
-  border: none;
-  padding: 14px 24px;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.2s;
+/* 스크롤바 숨기기 (슬라이더 영역용) */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
-
-.btn-airbnb:hover {
-  opacity: 0.9;
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
