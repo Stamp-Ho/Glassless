@@ -43,14 +43,15 @@
 ### RAG 흐름
 
 1. 자연어 질의 수신
-2. SQLite `Location`에서 키워드 LIKE 검색 또는 카테고리 필터
-3. 상위 N건 컨텍스트 문자열로 직렬화
+2. SQLite `Location`에서 키워드 LIKE 검색 또는 카테고리/지역 필터
+3. 후보가 비면 지역/카테고리/전체 데이터로 단계적 fallback
+4. 상위 N건 컨텍스트 문자열로 직렬화
 4. OpenAI에 시스템 프롬프트 + 컨텍스트 + 사용자 질문 전달
 5. 응답 + 참고 데이터 목록 반환
 
 ### OpenAI 호출 제약
 
-- `max_tokens` 명시 (기본 500)
+- 모델에 따라 `max_tokens` 또는 `max_completion_tokens` 사용
 - `httpx.Timeout` 필수
 - 모델은 환경변수로 주입
 

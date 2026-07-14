@@ -31,12 +31,6 @@ async def _fetch_candidates(payload: ChatRequest, db: AsyncSession) -> list[dict
         .outerjoin(LocationRating, LocationRating.location_id == Location.id)
     )
 
-    filters = []
-    if payload.region:
-        filters.append(Location.region == payload.region.strip())
-    if payload.category:
-        filters.append(Location.category == payload.category.strip())
-
     like_filters = []
     for token in tokens:
         pattern = f"%{token}%"
@@ -44,26 +38,52 @@ async def _fetch_candidates(payload: ChatRequest, db: AsyncSession) -> list[dict
         like_filters.append(Location.address.ilike(pattern))
         like_filters.append(Location.category.ilike(pattern))
 
-    if like_filters:
-        filters.append(or_(*like_filters))
+    async def execute_with_filters(*, include_region: bool, include_category: bool, include_keywords: bool) -> list[dict]:
+        scoped_stmt = stmt
+        scoped_filters = []
+        if include_region and payload.region:
+            scoped_filters.append(Location.region == payload.region.strip())
+        if include_category and payload.category:
+            scoped_filters.append(Location.category == payload.category.strip())
+        if include_keywords and like_filters:
+            scoped_filters.append(or_(*like_filters))
 
-    if filters:
-        stmt = stmt.where(*filters)
+        if scoped_filters:
+            scoped_stmt = scoped_stmt.where(*scoped_filters)
 
-    stmt = stmt.group_by(Location.id).order_by(func.coalesce(func.avg(LocationRating.score), 0.0).desc(), Location.id.asc())
-    stmt = stmt.limit(settings.chat_max_references)
-
-    result = await db.execute(stmt)
-    rows = []
-    for location, rating_avg, rating_count in result.all():
-        rows.append(
-            {
-                "location": location,
-                "rating_avg": float(rating_avg or 0.0),
-                "rating_count": int(rating_count or 0),
-            }
+        scoped_stmt = scoped_stmt.group_by(Location.id).order_by(
+            func.coalesce(func.avg(LocationRating.score), 0.0).desc(),
+            func.count(LocationRating.id).desc(),
+            Location.id.asc(),
         )
-    return rows
+        scoped_stmt = scoped_stmt.limit(settings.chat_max_references)
+
+        scoped_result = await db.execute(scoped_stmt)
+        scoped_rows = []
+        for location, rating_avg, rating_count in scoped_result.all():
+            scoped_rows.append(
+                {
+                    "location": location,
+                    "rating_avg": float(rating_avg or 0.0),
+                    "rating_count": int(rating_count or 0),
+                }
+            )
+        return scoped_rows
+
+    candidate_sets: list[list[dict]] = [
+        await execute_with_filters(include_region=True, include_category=True, include_keywords=True),
+        await execute_with_filters(include_region=True, include_category=True, include_keywords=False),
+        await execute_with_filters(include_region=False, include_category=False, include_keywords=True),
+        await execute_with_filters(include_region=True, include_category=False, include_keywords=False),
+        await execute_with_filters(include_region=False, include_category=True, include_keywords=False),
+        await execute_with_filters(include_region=False, include_category=False, include_keywords=False),
+    ]
+
+    for candidate_rows in candidate_sets:
+        if candidate_rows:
+            return candidate_rows
+
+    return []
 
 
 def _build_context(rows: list[dict]) -> str:
@@ -90,6 +110,27 @@ def _build_system_prompt() -> str:
     )
 
 
+def _build_chat_completion_payload(*, query_text: str, context_text: str) -> dict:
+    body = {
+        "model": settings.openai_model,
+        "messages": [
+            {"role": "system", "content": _build_system_prompt()},
+            {
+                "role": "user",
+                "content": f"[참고 데이터]\n{context_text}\n\n[질문]\n{query_text}",
+            },
+        ],
+    }
+
+    if settings.openai_model.startswith("gpt-5"):
+        body["max_completion_tokens"] = settings.openai_max_tokens
+        body["reasoning_effort"] = "minimal"
+    else:
+        body["max_tokens"] = settings.openai_max_tokens
+
+    return body
+
+
 @router.post("", response_model=ChatResponse)
 async def chat(payload: ChatRequest, db: AsyncSession = Depends(get_db)) -> ChatResponse:
     query_text = payload.query.strip()
@@ -112,19 +153,7 @@ async def chat(payload: ChatRequest, db: AsyncSession = Depends(get_db)) -> Chat
         return ChatResponse(answer="제공된 로컬 데이터만으로는 답할 수 없습니다.", references=[])
 
     context_text = _build_context(rows)
-    system_prompt = _build_system_prompt()
-
-    body = {
-        "model": settings.openai_model,
-        "max_tokens": settings.openai_max_tokens,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": f"[참고 데이터]\n{context_text}\n\n[질문]\n{query_text}",
-            },
-        ],
-    }
+    body = _build_chat_completion_payload(query_text=query_text, context_text=context_text)
 
     timeout = httpx.Timeout(settings.openai_timeout_seconds)
     headers = {
