@@ -4,88 +4,116 @@ import { useRouter } from 'vue-router';
 
 const router = useRouter();
 const posts = ref([]);
+const isLoading = ref(false);
+const isSubmitting = ref(false);
+const errorMessage = ref('');
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+
+const filterRegion = ref('');
+const filterCategory = ref('');
+const filterLocationId = ref('');
+
+const regionOptions = ['서울', '부산', '광주_전라권', '구미_경북권', '대전_충청권'];
+const categoryOptions = ['잡담', '후기', '질문', '구인'];
 
 // 입력 폼 상태 관리
-const isFormOpen = ref(false); // 클릭 시 폼 열기/닫기 토글용
-const selectedCategory = ref('잡담'); // 기본값 '잡담'
+const isFormOpen = ref(false);
+const selectedCategory = ref('잡담');
 const newTitle = ref('');
-const newLocation = ref('');
-const newDesc = ref('');
+const newRegion = ref('');
+const newContent = ref('');
+const newLocationId = ref('');
 const newPassword = ref('');
 
-// 삭제 검증용 상태 관리
-const activeDeleteId = ref(null);
-const deletePassword = ref('');
+const buildPostsUrl = () => {
+  const params = new URLSearchParams();
+  if (filterRegion.value) params.set('region', filterRegion.value);
+  if (filterCategory.value) params.set('category', filterCategory.value);
+  if (filterLocationId.value) params.set('location_id', filterLocationId.value);
+  return `${API_BASE_URL}/api/posts?${params.toString()}`;
+};
 
-onMounted(() => {
-  const savedPosts = localStorage.getItem('localhub_posts');
-  if (savedPosts) {
-    posts.value = JSON.parse(savedPosts);
-  } else {
-    // 카테고리와 임시 비밀번호('1234')가 포함된 초기 데이터 세팅
-    const dummy = [
-      { id: 1, category: '후기', title: '부산 광안리 드론쇼 명당 공유', location: '부산 수영구', desc: '여기 카페 2층 테라스가 숨겨진 뷰 맛집입니다.', password: '1234', likes: 12 },
-      { id: 2, category: '잡담', title: '경주 황리단길 주차 꿀팁', location: '경북 경주시', desc: '주말에는 공영주차장 말고 이 골목을 이용해보세요.', password: '1234', likes: 45 },
-      { id: 3, category: '구인', title: '이번주 토요일 애월 해안가 플로깅 하실 분!', location: '제주 애월읍', desc: '오전 10시에 투썸 앞에서 모여서 가볍게 쓰레기 줍고 커피 마셔요.', password: '1234', likes: 8 }
-    ];
-    posts.value = dummy;
-    localStorage.setItem('localhub_posts', JSON.stringify(dummy));
+const fetchPosts = async () => {
+  isLoading.value = true;
+  errorMessage.value = '';
+  try {
+    const response = await fetch(buildPostsUrl());
+    if (!response.ok) {
+      throw new Error('게시글 목록을 불러오지 못했습니다.');
+    }
+    posts.value = await response.json();
+  } catch (error) {
+    console.error(error);
+    errorMessage.value = '게시글 목록 조회에 실패했습니다. 잠시 후 다시 시도해 주세요.';
+  } finally {
+    isLoading.value = false;
   }
+};
+
+onMounted(async () => {
+  await fetchPosts();
 });
 
 // 게시글 추가
-const addPost = () => {
-  if (!newTitle.value || !newLocation.value || !newDesc.value || !newPassword.value) {
-    alert('모든 빈칸과 비밀번호를 입력해주세요!');
+const addPost = async () => {
+  if (isSubmitting.value) {
     return;
   }
 
-  const newPost = {
-    id: Date.now(),
+  if (!newTitle.value || !newRegion.value || !newContent.value || !newPassword.value) {
+    alert('카테고리, 제목, 지역, 본문, 비밀번호를 모두 입력해주세요!');
+    return;
+  }
+
+  if (!regionOptions.includes(newRegion.value)) {
+    alert('지역은 지정된 5개 권역 중에서 선택해야 합니다.');
+    return;
+  }
+
+  const payload = {
+    title: newTitle.value.trim(),
+    content: newContent.value.trim(),
+    password: newPassword.value,
     category: selectedCategory.value,
-    title: newTitle.value,
-    location: newLocation.value,
-    desc: newDesc.value,
-    password: newPassword.value, // 비밀번호 저장
-    likes: 0
   };
 
-  posts.value.unshift(newPost);
-  localStorage.setItem('localhub_posts', JSON.stringify(posts.value));
+  payload.region = newRegion.value;
+  if (newLocationId.value.trim()) {
+    payload.location_id = Number(newLocationId.value.trim());
+  }
+
+  try {
+    isSubmitting.value = true;
+    const response = await fetch(`${API_BASE_URL}/api/posts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}));
+      const detail = errorBody?.detail || '게시글 등록에 실패했습니다.';
+      throw new Error(String(detail));
+    }
+
+    await fetchPosts();
+  } catch (error) {
+    console.error(error);
+    alert(error.message || '게시글 등록에 실패했습니다.');
+    return;
+  } finally {
+    isSubmitting.value = false;
+  }
 
   // 입력창 초기화 및 폼 닫기
   newTitle.value = '';
-  newLocation.value = '';
-  newDesc.value = '';
+  newRegion.value = '';
+  newContent.value = '';
+  newLocationId.value = '';
   newPassword.value = '';
   selectedCategory.value = '잡담';
   isFormOpen.value = false;
-};
-
-// 게시글 삭제 시도 (비밀번호 확인창 토글)
-const requestDelete = (e, id) => {
-  e.stopPropagation(); // 카드 클릭(상세페이지 이동) 이벤트 방지
-  if (activeDeleteId.value === id) {
-    activeDeleteId.value = null;
-  } else {
-    activeDeleteId.value = id;
-    deletePassword.value = '';
-  }
-};
-
-// 비밀번호 검증 후 삭제 처리
-const confirmDelete = (e, id) => {
-  e.stopPropagation();
-  const targetPost = posts.value.find(p => p.id === id);
-  
-  if (targetPost.password === deletePassword.value) {
-    posts.value = posts.value.filter(p => p.id !== id);
-    localStorage.setItem('localhub_posts', JSON.stringify(posts.value));
-    activeDeleteId.value = null;
-    alert('게시글이 삭제되었습니다.');
-  } else {
-    alert('비밀번호가 일치하지 않습니다.');
-  }
 };
 
 const goToDetail = (id) => {
@@ -111,7 +139,7 @@ const goToDetail = (id) => {
             <label>카테고리</label>
             <div class="category-selector">
               <button 
-                v-for="cat in ['잡담', '구인', '후기']" 
+                v-for="cat in categoryOptions" 
                 :key="cat"
                 type="button"
                 :class="['category-btn', { active: selectedCategory === cat }]"
@@ -129,12 +157,20 @@ const goToDetail = (id) => {
 
           <div class="form-item">
             <label>지역 위치</label>
-            <input v-model="newLocation" type="text" placeholder="지역 이름 (예: 서울 마포구, 부산 해운대구)" />
+            <select v-model="newRegion">
+              <option value="" disabled>권역을 선택하세요</option>
+              <option v-for="region in regionOptions" :key="region" :value="region">{{ region }}</option>
+            </select>
+          </div>
+
+          <div class="form-item">
+            <label>연결할 명소 ID <span class="sub-label">(선택값)</span></label>
+            <input v-model="newLocationId" type="number" min="1" placeholder="예: 1" />
           </div>
 
           <div class="form-item">
             <label>이야기 본문</label>
-            <textarea v-model="newDesc" placeholder="이 명소와 관련된 꿀팁이나 생각을 자유롭게 들려주세요."></textarea>
+            <textarea v-model="newContent" placeholder="이 명소와 관련된 꿀팁이나 생각을 자유롭게 들려주세요."></textarea>
           </div>
 
           <div class="form-item">
@@ -143,37 +179,54 @@ const goToDetail = (id) => {
           </div>
         </div>
 
-        <button class="btn-submit-airbnb" @click="addPost">이야기 등록하기</button>
+        <button class="btn-submit-airbnb" :disabled="isSubmitting" @click="addPost">
+          {{ isSubmitting ? '등록 중...' : '이야기 등록하기' }}
+        </button>
       </div>
     </section>
 
     <section class="grid-section">
       <h2 class="section-title">지역에 대한 사람들의 생각을 확인해보세요 ✈️</h2>
+
+      <div class="filter-toolbar">
+        <select v-model="filterRegion" @change="fetchPosts">
+          <option value="">전체 권역</option>
+          <option v-for="region in regionOptions" :key="region" :value="region">{{ region }}</option>
+        </select>
+
+        <select v-model="filterCategory" @change="fetchPosts">
+          <option value="">전체 카테고리</option>
+          <option v-for="cat in categoryOptions" :key="cat" :value="cat">{{ cat }}</option>
+        </select>
+
+        <input
+          v-model="filterLocationId"
+          type="number"
+          min="1"
+          placeholder="명소 ID"
+          @keyup.enter="fetchPosts"
+        />
+
+        <button type="button" class="btn-refresh" @click="fetchPosts">검색</button>
+      </div>
+
+      <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
+      <p v-if="isLoading" class="state-text">게시글을 불러오는 중입니다...</p>
+      <p v-else-if="posts.length === 0" class="state-text">조건에 맞는 게시글이 없습니다.</p>
       
       <div class="grid-container">
         <div v-for="post in posts" :key="post.id" class="post-card" @click="goToDetail(post.id)">
           <div class="card-image-field">
             <span class="category-badge">{{ post.category }}</span>
-            <span class="location-badge">{{ post.location }}</span>
+            <span class="location-badge">{{ post.region || '지역 미지정' }}</span>
           </div>
           
           <div class="card-content">
             <h3 class="card-title">{{ post.title }}</h3>
-            <p class="card-desc">{{ post.desc }}</p>
+            <p class="card-desc">{{ post.content.slice(0, 25) }}{{ post.content.length > 25 ? '...' : '' }}</p>
             
             <div class="card-footer">
-              <span class="likes">💛 {{ post.likes || 0 }}</span>
-              <button class="btn-delete-trigger" @click="requestDelete($event, post.id)">삭제</button>
-            </div>
-
-            <div v-if="activeDeleteId === post.id" class="delete-confirm-box" @click.stop>
-              <input 
-                v-model="deletePassword" 
-                type="password" 
-                placeholder="비밀번호 입력" 
-                @keyup.enter="confirmDelete($event, post.id)"
-              />
-              <button class="btn-confirm" @click="confirmDelete($event, post.id)">확인</button>
+              <span class="view-detail-text">클릭하여 상세 보기</span>
             </div>
           </div>
         </div>
@@ -278,7 +331,7 @@ const goToDetail = (id) => {
 }
 
 .category-btn {
-  border: none;
+  border: 1px solid transparent;
   background: none;
   padding: 8px 20px;
   font-size: 0.85rem;
@@ -292,10 +345,11 @@ const goToDetail = (id) => {
 .category-btn.active {
   background-color: white;
   color: var(--color-airbnb-dark);
+  border-color: #333;
   box-shadow: 0 2px 6px rgba(0,0,0,0.08);
 }
 
-.form-item input, .form-item textarea {
+.form-item input, .form-item textarea, .form-item select {
   border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 12px 14px;
@@ -305,7 +359,7 @@ const goToDetail = (id) => {
   transition: border-color 0.2s;
 }
 
-.form-item input:focus, .form-item textarea:focus {
+.form-item input:focus, .form-item textarea:focus, .form-item select:focus {
   border-color: var(--color-airbnb-red);
 }
 
@@ -319,7 +373,7 @@ const goToDetail = (id) => {
   width: 100%;
   background-color: var(--color-airbnb-red);
   color: white;
-  border: none;
+  border: 2px solid #8f0d2f;
   padding: 16px;
   font-size: 1.05rem;
   font-weight: 700;
@@ -333,6 +387,11 @@ const goToDetail = (id) => {
   filter: brightness(0.9);
 }
 
+.btn-submit-airbnb:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 /* 2. 게시물 리스트 그리드 영역 (한 줄에 3개 노출) */
 .grid-section {
   margin-top: 20px;
@@ -343,6 +402,45 @@ const goToDetail = (id) => {
   font-weight: 700;
   margin-bottom: 28px;
   color: var(--color-airbnb-dark);
+}
+
+.filter-toolbar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.filter-toolbar select,
+.filter-toolbar input {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  min-width: 150px;
+}
+
+.btn-refresh {
+  border: 2px solid #1f1f1f;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  background-color: var(--color-airbnb-dark);
+  color: white;
+  cursor: pointer;
+}
+
+.state-text {
+  margin: 0 0 14px;
+  font-size: 0.92rem;
+  color: var(--color-airbnb-gray);
+}
+
+.error-text {
+  margin: 0 0 14px;
+  font-size: 0.92rem;
+  color: #b42318;
 }
 
 .grid-container {
@@ -365,7 +463,7 @@ const goToDetail = (id) => {
 
 .post-card {
   background-color: white;
-  border: 1px solid var(--color-border);
+  border: 2px solid #8d8d8d;
   border-radius: var(--radius-airbnb);
   overflow: hidden;
   cursor: pointer;
@@ -373,11 +471,13 @@ const goToDetail = (id) => {
   position: relative;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
 }
 
 .post-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 24px rgba(0,0,0,0.06);
+  box-shadow: 0 12px 24px rgba(0,0,0,0.1);
+  border-color: #2f2f2f;
 }
 
 .card-image-field {
@@ -388,6 +488,7 @@ const goToDetail = (id) => {
   align-items: flex-end;
   justify-content: space-between;
   padding: 12px;
+  border-bottom: 1px solid #9d9d9d;
 }
 
 .category-badge {
@@ -438,6 +539,8 @@ const goToDetail = (id) => {
   justify-content: space-between;
   align-items: center;
   margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid #d2d2d2;
 }
 
 .likes {
@@ -445,49 +548,9 @@ const goToDetail = (id) => {
   font-weight: 600;
 }
 
-.btn-delete-trigger {
-  background: none;
-  border: none;
+.view-detail-text {
+  font-size: 0.82rem;
   color: var(--color-airbnb-gray);
-  font-size: 0.8rem;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
-.btn-delete-trigger:hover {
-  color: var(--color-airbnb-red);
-}
-
-/* 카드 내부 비밀번호 입력박스 */
-.delete-confirm-box {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  background-color: rgba(255, 255, 255, 0.96);
-  padding: 12px 20px;
-  border-top: 1px solid var(--color-border);
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.delete-confirm-box input {
-  flex: 1;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 0.8rem;
-  outline: none;
-}
-
-.btn-confirm {
-  background-color: var(--color-airbnb-dark);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 0.8rem;
-  cursor: pointer;
+  font-weight: 600;
 }
 </style>
