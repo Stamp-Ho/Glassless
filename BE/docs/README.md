@@ -11,6 +11,7 @@
 - [05 보안 및 운영 제약 체크리스트](./05_security_and_constraints.md)
 - [06 개발 워크플로우 및 배포](./06_workflow_and_deploy.md)
 - [07 Render CI/CD 준비](./07_render_cicd.md)
+- [08 게시글 카테고리 및 장소 연결](./08_post_category_location.md)
 
 ## MVP 원칙
 

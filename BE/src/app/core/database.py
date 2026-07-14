@@ -24,3 +24,13 @@ async def init_db() -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+        column_rows = await conn.exec_driver_sql("PRAGMA table_info(posts)")
+        column_names = {row[1] for row in column_rows.fetchall()}
+
+        if "category" not in column_names:
+            await conn.exec_driver_sql(
+                "ALTER TABLE posts ADD COLUMN category VARCHAR(20) NOT NULL DEFAULT '잡담'"
+            )
+        if "location_id" not in column_names:
+            await conn.exec_driver_sql("ALTER TABLE posts ADD COLUMN location_id INTEGER")

@@ -3,26 +3,30 @@
 ## 1) Posts API
 
 ### GET `/api/posts`
-
-- 지역(`region`) 필터 지원
-- 최신순 정렬
-- 응답은 목록 스키마 사용
+ - 지역(`region`) 필터 지원
+ - 카테고리(`category`) 필터 지원
+ - 장소 연결(`location_id`) 필터 지원
+ - 최신순 정렬
 
 ### GET `/api/posts/{post_id}`
 
 - 단건 상세 반환
 - 없으면 404
 
+
 ### POST `/api/posts`
 
-- 요청: `title`, `content`, `password`, `region?`
+- 요청: `title`, `content`, `password`, `category`, `location_id?`, `region?`
 - 검증: 빈 문자열 금지, 최대 길이 제한
+- `category`는 `잡담`, `후기`, `질문`, `구인` 중 하나
+- `location_id`가 있으면 존재하는 장소만 허용
 
 ### PUT `/api/posts/{post_id}`
 
 - 본문에 `password` 포함
 - 검증 규칙: `post.password == request.password`
 - 일치 시 수정, 불일치 시 403
+- `category`와 `location_id`도 수정 가능
 
 ### DELETE `/api/posts/{post_id}`
 
