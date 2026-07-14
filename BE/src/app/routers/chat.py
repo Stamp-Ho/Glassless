@@ -13,6 +13,26 @@ from app.schemas.chat import ChatRequest, ChatResponse, LocationRef
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
+_REGION_ALIASES: dict[str, tuple[str, ...]] = {
+    "서울": ("서울", "서울시", "서울특별시"),
+    "부산": ("부산", "부산시", "부산광역시"),
+    "대구": ("대구", "대구시", "대구광역시"),
+    "인천": ("인천", "인천시", "인천광역시"),
+    "광주": ("광주", "광주시", "광주광역시"),
+    "대전": ("대전", "대전시", "대전광역시"),
+    "울산": ("울산", "울산시", "울산광역시"),
+    "세종": ("세종", "세종시", "세종특별자치시"),
+    "경기": ("경기", "경기도"),
+    "강원": ("강원", "강원도"),
+    "충북": ("충북", "충청북도"),
+    "충남": ("충남", "충청남도"),
+    "전북": ("전북", "전라북도"),
+    "전남": ("전남", "전라남도"),
+    "경북": ("경북", "경상북도"),
+    "경남": ("경남", "경상남도"),
+    "제주": ("제주", "제주도", "제주특별자치도"),
+}
+
 
 def _extract_keywords(query: str) -> list[str]:
     normalized = re.sub(r"\s+", " ", query).strip()
@@ -20,8 +40,17 @@ def _extract_keywords(query: str) -> list[str]:
     return tokens[:8]
 
 
+def _infer_region(query: str) -> str | None:
+    normalized = re.sub(r"\s+", "", query)
+    for region, aliases in _REGION_ALIASES.items():
+        if any(alias in normalized for alias in aliases):
+            return region
+    return None
+
+
 async def _fetch_candidates(payload: ChatRequest, db: AsyncSession) -> list[dict]:
     tokens = _extract_keywords(payload.query)
+    inferred_region = payload.region.strip() if payload.region else _infer_region(payload.query)
     stmt = (
         select(
             Location,
@@ -41,8 +70,8 @@ async def _fetch_candidates(payload: ChatRequest, db: AsyncSession) -> list[dict
     async def execute_with_filters(*, include_region: bool, include_category: bool, include_keywords: bool) -> list[dict]:
         scoped_stmt = stmt
         scoped_filters = []
-        if include_region and payload.region:
-            scoped_filters.append(Location.region == payload.region.strip())
+        if include_region and inferred_region:
+            scoped_filters.append(Location.region == inferred_region)
         if include_category and payload.category:
             scoped_filters.append(Location.category == payload.category.strip())
         if include_keywords and like_filters:
@@ -70,14 +99,22 @@ async def _fetch_candidates(payload: ChatRequest, db: AsyncSession) -> list[dict
             )
         return scoped_rows
 
-    candidate_sets: list[list[dict]] = [
-        await execute_with_filters(include_region=True, include_category=True, include_keywords=True),
-        await execute_with_filters(include_region=True, include_category=True, include_keywords=False),
-        await execute_with_filters(include_region=False, include_category=False, include_keywords=True),
-        await execute_with_filters(include_region=True, include_category=False, include_keywords=False),
-        await execute_with_filters(include_region=False, include_category=True, include_keywords=False),
-        await execute_with_filters(include_region=False, include_category=False, include_keywords=False),
-    ]
+    if inferred_region:
+        candidate_sets: list[list[dict]] = [
+            await execute_with_filters(include_region=True, include_category=True, include_keywords=True),
+            await execute_with_filters(include_region=True, include_category=True, include_keywords=False),
+            await execute_with_filters(include_region=True, include_category=False, include_keywords=True),
+            await execute_with_filters(include_region=True, include_category=False, include_keywords=False),
+        ]
+    else:
+        candidate_sets = [
+            await execute_with_filters(include_region=True, include_category=True, include_keywords=True),
+            await execute_with_filters(include_region=True, include_category=True, include_keywords=False),
+            await execute_with_filters(include_region=False, include_category=False, include_keywords=True),
+            await execute_with_filters(include_region=True, include_category=False, include_keywords=False),
+            await execute_with_filters(include_region=False, include_category=True, include_keywords=False),
+            await execute_with_filters(include_region=False, include_category=False, include_keywords=False),
+        ]
 
     for candidate_rows in candidate_sets:
         if candidate_rows:
