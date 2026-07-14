@@ -40,6 +40,19 @@
 - `query` 길이 제한 (`CHAT_MAX_QUERY_LENGTH`)
 - 공백-only 입력 거부
 
+### 요청 예시
+
+```json
+{
+	"query": "공원 갈랭",
+	"region": "서울",
+	"category": ""
+}
+```
+
+- `region`을 주면 해당 권역 후보를 우선 검색
+- `category`는 비워도 되며, 서버에서 자동으로 `null`로 정규화
+
 ### RAG 흐름
 
 1. 자연어 질의 수신
