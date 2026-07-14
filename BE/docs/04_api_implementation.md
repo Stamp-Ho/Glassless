@@ -1,0 +1,77 @@
+# 04. API 구현 가이드 (Anonymous CRUD + RAG Chat)
+
+## 1) Posts API
+
+### GET `/api/posts`
+
+- 지역(`region`) 필터 지원
+- 최신순 정렬
+- 응답은 목록 스키마 사용
+
+### GET `/api/posts/{post_id}`
+
+- 단건 상세 반환
+- 없으면 404
+
+### POST `/api/posts`
+
+- 요청: `title`, `content`, `password`, `region?`
+- 검증: 빈 문자열 금지, 최대 길이 제한
+
+### PUT `/api/posts/{post_id}`
+
+- 본문에 `password` 포함
+- 검증 규칙: `post.password == request.password`
+- 일치 시 수정, 불일치 시 403
+
+### DELETE `/api/posts/{post_id}`
+
+- 본문에 `password` 포함
+- 일치 시 삭제, 불일치 시 403
+
+## 2) Chat API (`POST /api/chat`)
+
+### 입력 검증
+
+- `query` 길이 제한 (`CHAT_MAX_QUERY_LENGTH`)
+- 공백-only 입력 거부
+
+### RAG 흐름
+
+1. 자연어 질의 수신
+2. SQLite `Location`에서 키워드 LIKE 검색 또는 카테고리 필터
+3. 상위 N건 컨텍스트 문자열로 직렬화
+4. OpenAI에 시스템 프롬프트 + 컨텍스트 + 사용자 질문 전달
+5. 응답 + 참고 데이터 목록 반환
+
+### OpenAI 호출 제약
+
+- `max_tokens` 명시 (기본 500)
+- `httpx.Timeout` 필수
+- 모델은 환경변수로 주입
+
+## 3) 스키마 권장안
+
+### ChatRequest
+
+- `query: str`
+- `region: str | None = None`
+- `category: str | None = None`
+
+### ChatResponse
+
+- `answer: str`
+- `references: list[LocationRef]`
+
+### LocationRef
+
+- `name: str`
+- `category: str`
+- `address: str | None`
+
+## 4) 라우터 분리
+
+- `routers/posts.py`
+- `routers/chat.py`
+- `APIRouter(prefix="/posts", tags=["posts"])`
+- `APIRouter(prefix="/chat", tags=["chat"])`
