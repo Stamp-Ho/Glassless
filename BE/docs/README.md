@@ -12,6 +12,7 @@
 - [06 개발 워크플로우 및 배포](./06_workflow_and_deploy.md)
 - [07 Render CI/CD 준비](./07_render_cicd.md)
 - [08 게시글 카테고리 및 장소 연결](./08_post_category_location.md)
+- [09 명소 별점 기능](./09_location_ratings.md)
 
 ## MVP 원칙
 

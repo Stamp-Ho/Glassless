@@ -16,7 +16,7 @@ async def list_posts(
     category: PostCategory | None = None,
     location_id: int | None = None,
     db: AsyncSession = Depends(get_db),
-) -> list[Post]:
+) -> list[PostListItem]:
     query = select(Post)
     if region:
         query = query.where(Post.region == region)
@@ -27,7 +27,20 @@ async def list_posts(
     query = query.order_by(desc(Post.created_at))
 
     result = await db.execute(query)
-    return list(result.scalars().all())
+    posts = list(result.scalars().all())
+    return [
+        PostListItem(
+            id=post.id,
+            title=post.title,
+            content=post.content[:30],
+            category=PostCategory(post.category),
+            location_id=post.location_id,
+            region=post.region,
+            created_at=post.created_at,
+            updated_at=post.updated_at,
+        )
+        for post in posts
+    ]
 
 
 @router.get("/{post_id}", response_model=PostResponse)

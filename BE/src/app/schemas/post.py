@@ -50,6 +50,7 @@ class PostListItem(BaseModel):
 
     id: int
     title: str
+    content: str
     category: PostCategory
     location_id: int | None
     region: str | None
