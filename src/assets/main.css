@@ -1,0 +1,33 @@
+/* src/assets/main.css */
+:root {
+  --color-airbnb-red: #E01A4F;    /* 기존보다 한 층 더 진하고 고급스러운 레드 */
+  --color-airbnb-dark: #222222;   /* 깊은 블랙 */
+  --color-airbnb-gray: #717171;   /* 가독성 좋은 부드러운 회색 */
+  --color-bg-light: #FAFAFA;      /* 깨끗하고 눈이 편안한 밝은 배경 */
+  --color-border: #EBEBEB;        /* 더 연하고 미니멀한 경계선 */
+  --radius-airbnb: 16px;          /* 둥근 느낌을 살린 모서리 */
+  --font-apple: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-apple);
+}
+
+body {
+  background-color: var(--color-bg-light);
+  color: var(--color-airbnb-dark);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 스크롤바 숨기기 (슬라이더 영역용) */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
