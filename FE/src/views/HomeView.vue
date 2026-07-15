@@ -246,18 +246,23 @@ const formatDate = (dateStr) => {
 /* 🛠️ 가로 스크롤을 없애고 자리가 부족하면 다음 줄로 떨어지도록 flex-wrap 처리 */
 .slider-container {
   display: flex;
-  gap: 20px;
   flex-wrap: wrap;
+  gap: 20px;
   padding-bottom: 12px;
+  width: 100%;
 }
 
-/* 🛠️ 카드는 평소에 너비가 280px로 완전 고정되며, 
-   화면 폭이 280px보다 작아질 때만 깨지지 않고 100% 비율로 축소됨 */
+/* 🛠️ 데스크톱 풀화면 기준으로 한 줄에 무조건 4개(25%)씩 유연하게 차도록 수정 */
 .preview-card {
-  width: 280px;
+  /* 🔥 핵심 수정:
+    - calc()를 이용해 전체 100% 영역에서 gap(20px) 3개 분량인 60px을 뺀 뒤, 4등분(25%) 해줍니다.
+    - 이렇게 하면 화면 폭에 맞춰 카드가 유연하게 늘어나면서 정확히 한 줄에 4개가 꽉 차게 들어갑니다.
+  */
+  width: calc((100% - 60px) / 4);
+
   max-width: 100%;
-  flex-shrink: 1; /* 화면이 카드 크기보다 작아지면 수축 허용 */
-  flex-grow: 0; /* 마음대로 늘어나서 깨지지 않도록 고정 */
+  flex-shrink: 1;
+  flex-grow: 1; /* 남는 빈 공간을 꽉 채우도록 허용 */
   background-color: white;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-airbnb);
@@ -522,28 +527,15 @@ const formatDate = (dateStr) => {
 
 /* 🛠️ 모바일 해상도(768px 이하)일 때 패딩 조정 및 이미지 높이 조절 */
 @media (max-width: 768px) {
-  .preview-section {
-    padding: 0 16px;
-    margin: 24px auto 0;
-  }
-  .hero-map-section {
-    height: 240px;
-  }
-  .slider-container {
-    gap: 16px;
-    justify-content: center; /* 스마트폰에서 중앙 정렬을 원할 시 */
+  .preview-card {
+    width: calc((100% - 20px) / 2);
   }
 }
 
-@media (max-width: 600px) {
-  .modal-window {
-    border-radius: 12px;
-  }
-  .modal-post-title {
-    font-size: 1.3rem;
-  }
-  .modal-img-placeholder {
-    height: 180px;
+/* 3. 세로 모바일 (480px 이하): 한 줄에 1개씩 꽉 차게 배치 */
+@media (max-width: 480px) {
+  .preview-card {
+    width: 100%;
   }
 }
 </style>

@@ -1,6 +1,39 @@
 <script setup>
-import { ref, nextTick, computed } from "vue";
+import { ref, nextTick, computed, onMounted } from "vue";
 import CommonHeader from "./components/CommonHeader.vue";
+
+// =========================================================================
+// [0] 🌓 다크 모드 (Dark Mode) 설정 및 상태 관리
+// =========================================================================
+const isDarkMode = ref(false);
+
+const initTheme = () => {
+  const savedTheme = localStorage.getItem("theme");
+  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+  if (savedTheme === "dark" || (!savedTheme && prefersDark)) {
+    isDarkMode.value = true;
+    document.documentElement.classList.add("dark");
+  } else {
+    isDarkMode.value = false;
+    document.documentElement.classList.remove("dark");
+  }
+};
+
+const toggleTheme = () => {
+  isDarkMode.value = !isDarkMode.value;
+  if (isDarkMode.value) {
+    document.documentElement.classList.add("dark");
+    localStorage.setItem("theme", "dark");
+  } else {
+    document.documentElement.classList.remove("dark");
+    localStorage.setItem("theme", "light");
+  }
+};
+
+onMounted(() => {
+  initTheme();
+});
 
 // =========================================================================
 // [1] 💬 챗봇(Chatbot) 관련 스크립트 영역
@@ -49,8 +82,8 @@ const sendChat = async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         query: userText,
-        region: detectedRegion,
-        category: "관광",
+        region: "",
+        category: "",
       }),
     });
 
@@ -105,7 +138,6 @@ const WEATHER_BASE_URL = "https://api.openweathermap.org/data/2.5/weather";
 const selectedCity = ref("");
 const selectedDistrict = ref("");
 
-// 서울, 부산, 대전_충청, 구미_경북, 광주_전라 정밀 행정구역 정보 구축
 const regionsData = {
   seoul: {
     name: "서울특별시",
@@ -290,7 +322,6 @@ const searchWeather = async () => {
     let response = await fetch(url);
     let isFallback = false;
 
-    // 세부 구 행정구역 날씨 404 시 거점 도시 대표 날씨로 폴백 전환 처리
     if (response.status === 404) {
       const fallbackQuery = currentCityData.fallbackQuery;
       url = `${WEATHER_BASE_URL}?q=${fallbackQuery}&appid=${WEATHER_API_KEY}&units=metric&lang=kr`;
@@ -347,9 +378,17 @@ const searchWeather = async () => {
     <CommonHeader />
     <router-view />
 
-    <!-- =================================================================== -->
-    <!-- [A] 플로팅 버튼 영역 -->
-    <!-- =================================================================== -->
+    <!-- ✨ 새로 추가된 왼쪽 아래 다크모드 플로팅 버튼 -->
+    <button
+      class="theme-toggle-btn"
+      @click="toggleTheme"
+      aria-label="다크 모드 토글"
+    >
+      <span v-if="isDarkMode">☀️</span>
+      <span v-else>🌙</span>
+    </button>
+
+    <!-- 우측 아래 기존 날씨 / 챗봇 버튼 (유지) -->
     <button
       class="weather-floating-btn"
       @click="toggleWeather"
@@ -368,9 +407,6 @@ const searchWeather = async () => {
       <span v-else>✕</span>
     </button>
 
-    <!-- =================================================================== -->
-    <!-- [B] ☀️ 날씨(Weather) 모달 영역 -->
-    <!-- =================================================================== -->
     <div v-if="isWeatherOpen" class="weather-modal">
       <div class="weather-header">
         <div class="header-info">
@@ -484,9 +520,6 @@ const searchWeather = async () => {
       </div>
     </div>
 
-    <!-- =================================================================== -->
-    <!-- [C] 💬 챗봇(Chatbot) 모달 영역 -->
-    <!-- =================================================================== -->
     <div v-if="isChatOpen" class="chatbot-modal">
       <div class="chatbot-header">
         <div class="header-info">
@@ -554,12 +587,98 @@ const searchWeather = async () => {
 <style>
 @import "./assets/main.css";
 
-/* 기본 앱 구조 */
+/* =========================================================================
+   🌓 [테마 변수 관리] 라이트 / 다크모드 색상 선언 및 부드러운 전환 구현
+   ========================================================================= */
+:root {
+  /* 라이트 모드 (기본 테마) */
+  --bg-app: #ffffff;
+  --bg-modal: #ffffff;
+  --bg-body: #fafafa;
+  --bg-chat-body: #f8f9fa;
+  --bg-bubble-bot: #ffffff;
+  --bg-bubble-user: #ff385c;
+  --bg-ref-card: #f9f9f9;
+
+  --text-main: #222222;
+  --text-sub: #767676;
+  --text-bot: #222222;
+  --text-user: #ffffff;
+
+  --border-color: #ebebeb;
+  --input-bg: #ffffff;
+}
+
+html.dark {
+  /* 다크 모드 (html 클래스 적용 시 활성화) */
+  --bg-app: #121212;
+  --bg-modal: #1e1e1e;
+  --bg-body: #181818;
+  --bg-chat-body: #151515;
+  --bg-bubble-bot: #2d2d2d;
+  --bg-bubble-user: #e02447;
+  --bg-ref-card: #252525;
+
+  --text-main: #161515; /* 또는 부드러운 화이트 톤인 #f5f5f5 추천 */
+  --text-sub: #a0a0a0;
+  --text-bot: #eaeaea;
+  --text-user: #ffffff;
+
+  --border-color: #333333;
+  --input-bg: #2d2d2d;
+}
+
+/* 기본 앱 구조 - CSS 변수 연동 */
 .app-layout {
   position: relative;
   min-height: 100vh;
   overflow-x: hidden;
-  background-color: #ffffff;
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
+}
+
+/* =========================================================================
+   🌓 왼쪽 아래 다크모드 플로팅 버튼 스타일
+   ========================================================================= */
+.theme-toggle-btn {
+  position: fixed;
+  left: 24px; /* 왼쪽 여백 */
+  bottom: 24px; /* 아래쪽 여백 (오른쪽 챗봇 버튼과 대칭 높이) */
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: var(--bg-modal); /* 다크/라이트 테마 배경색에 부드럽게 반응 */
+  border: 1px solid var(--border-color);
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 999;
+}
+
+/* 마우스 호버 시 살짝 떠오르는 효과 */
+.theme-toggle-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* =========================================================================
+   📱 모바일 반응형 대응 (화면이 작아질 때 여백 및 크기 조정)
+   ========================================================================= */
+@media (max-width: 480px) {
+  .theme-toggle-btn {
+    left: 16px; /* 모바일에서는 여백을 약간 줄임 */
+    bottom: 20px;
+    width: 48px;
+    height: 48px;
+    font-size: 18px;
+  }
 }
 
 /* =========================================================================
@@ -568,8 +687,8 @@ const searchWeather = async () => {
 .weather-result-display {
   position: relative;
   min-height: 170px;
-  background-color: white;
-  border: 1px solid #ebebeb;
+  background-color: var(--bg-modal);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   padding: 16px;
   display: flex;
@@ -578,7 +697,8 @@ const searchWeather = async () => {
   overflow: hidden;
   transition:
     background 0.6s ease,
-    border-color 0.4s ease;
+    border-color 0.4s ease,
+    background-color 0.3s ease;
 }
 
 .weather-card-content {
@@ -586,7 +706,7 @@ const searchWeather = async () => {
   z-index: 5;
 }
 .modal-theme-default {
-  background-color: #ffffff;
+  background-color: var(--bg-modal);
 }
 .modal-theme-clear {
   background: linear-gradient(
@@ -793,7 +913,7 @@ const searchWeather = async () => {
 }
 
 /* =========================================================================
-   [UI 요소 기본 스타일링]
+   [UI 요소 기본 스타일링 - 테마 전면 교체]
    ========================================================================= */
 .weather-category-selectors {
   display: flex;
@@ -802,23 +922,27 @@ const searchWeather = async () => {
 }
 .weather-select {
   width: 100%;
-  border: 1px solid var(--color-border, #ebebeb);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 12px 14px;
   font-size: 0.9rem;
   outline: none;
-  background-color: white;
-  color: #222222;
+  background-color: var(--input-bg);
+  color: var(--text-main);
   cursor: pointer;
   appearance: none;
   background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23767676' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 14px center;
   background-size: 14px;
+  transition:
+    background-color 0.3s,
+    border-color 0.3s,
+    color 0.3s;
 }
 .weather-select:disabled {
-  background-color: #f1f2f6;
-  color: #a4b0be;
+  background-color: var(--border-color);
+  color: var(--text-sub);
   cursor: not-allowed;
 }
 .btn-weather-search {
@@ -833,8 +957,8 @@ const searchWeather = async () => {
   transition: background-color 0.2s;
 }
 .btn-weather-search:disabled {
-  background-color: #ebebeb;
-  color: #767676;
+  background-color: var(--border-color);
+  color: var(--text-sub);
   cursor: not-allowed;
 }
 
@@ -897,23 +1021,29 @@ const searchWeather = async () => {
   background-color: #222222;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
-
-/* 모달창 레이어 (z-index 2000으로 버튼 가림 완벽 해결) */
+/* 모달창 레이어 */
 .weather-modal {
   position: fixed;
-  bottom: 176px;
-  right: 32px;
+  /* ☀️기존 164px에서 180px로 올림
+     날씨 플로팅 버튼(bottom 94px + 버튼 높이 54px = 148px)의 머리 위로 확실하게 띄웁니다. */
+  bottom: 180px;
+
+  right: 24px;
   width: 360px;
-  background-color: white;
+  background-color: var(--bg-modal);
   border-radius: 12px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   z-index: 2000;
   animation: weatherSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    background-color 0.3s,
+    border-color 0.3s;
 }
+
 @keyframes weatherSlideUp {
   from {
     transform: translateY(20px);
@@ -924,22 +1054,27 @@ const searchWeather = async () => {
     opacity: 1;
   }
 }
-
 .chatbot-modal {
   position: fixed;
-  bottom: 104px;
-  right: 32px;
+  /* 💬 기존 90px에서 102px로 올림
+     챗봇 플로팅 버튼(bottom 24px + 버튼 높이 54px = 78px)의 머리를 절대 가리지 않도록 조정합니다. */
+  bottom: 102px;
+
+  right: 24px;
   width: 390px;
   height: 560px;
-  background-color: white;
+  background-color: var(--bg-modal);
   border-radius: 12px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   z-index: 2000;
   animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    background-color 0.3s,
+    border-color 0.3s;
 }
 @keyframes slideUp {
   from {
@@ -966,14 +1101,15 @@ const searchWeather = async () => {
 }
 .weather-body {
   padding: 20px;
-  background-color: #fafafa;
+  background-color: var(--bg-body);
   display: flex;
   flex-direction: column;
   gap: 14px;
+  transition: background-color 0.3s;
 }
 .weather-empty-state {
   text-align: center;
-  color: #b2bec3;
+  color: var(--text-sub);
   z-index: 5;
 }
 .weather-empty-state span {
@@ -1003,14 +1139,14 @@ const searchWeather = async () => {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  border-bottom: 1px dashed #cbd5e1;
+  border-bottom: 1px dashed var(--border-color);
   padding-bottom: 12px;
   margin-bottom: 12px;
 }
 .res-city {
   font-size: 0.82rem;
   font-weight: 700;
-  color: #7f8c8d;
+  color: var(--text-sub);
 }
 .temp-status-block {
   display: flex;
@@ -1020,7 +1156,7 @@ const searchWeather = async () => {
 .res-temp {
   font-size: 1.8rem;
   font-weight: 800;
-  color: #222222;
+  color: var(--text-main);
 }
 .res-status {
   font-size: 1rem;
@@ -1031,7 +1167,7 @@ const searchWeather = async () => {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  background-color: rgba(255, 249, 219, 0.85);
+  background-color: rgba(255, 249, 219, 0.15);
   border: 1px solid #ffe066;
   border-radius: 6px;
   padding: 10px 12px;
@@ -1053,19 +1189,20 @@ const searchWeather = async () => {
   text-decoration: underline;
 }
 .weather-comment-box {
-  background-color: rgba(245, 246, 250, 0.85);
+  background-color: var(--bg-body);
   padding: 10px 12px;
   border-radius: 6px;
   font-size: 0.82rem;
-  color: #485460;
+  color: var(--text-main);
   line-height: 1.4;
+  border: 1px solid var(--border-color);
 }
 .weather-comment-box p {
   margin: 0;
 }
 .weather-inside-loading {
   text-align: center;
-  color: #767676;
+  color: var(--text-sub);
   font-size: 0.82rem;
   z-index: 5;
 }
@@ -1138,10 +1275,11 @@ const searchWeather = async () => {
   flex: 1;
   padding: 20px;
   overflow-y: auto;
-  background-color: #f8f9fa;
+  background-color: var(--bg-chat-body);
   display: flex;
   flex-direction: column;
   gap: 16px;
+  transition: background-color 0.3s;
 }
 .chat-bubble-wrapper {
   display: flex;
@@ -1162,14 +1300,18 @@ const searchWeather = async () => {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
 }
 .bot .chat-bubble {
-  background-color: white;
-  border: 1px solid #ebebeb;
-  color: #222222;
+  background-color: var(--bg-bubble-bot);
+  border: 1px solid var(--border-color);
+  color: var(--text-bot);
   border-top-left-radius: 2px;
+  transition:
+    background-color 0.3s,
+    border-color 0.3s,
+    color 0.3s;
 }
 .user .chat-bubble {
-  background-color: #ff385c;
-  color: white;
+  background-color: var(--bg-bubble-user);
+  color: var(--text-user);
   border-top-right-radius: 2px;
 }
 .bubble-text {
@@ -1180,21 +1322,24 @@ const searchWeather = async () => {
 .reference-container {
   margin-top: 14px;
   padding-top: 12px;
-  border-top: 1px dashed #ebebeb;
+  border-top: 1px dashed var(--border-color);
 }
 .ref-title {
   font-size: 0.82rem;
   font-weight: 700;
-  color: #222222;
+  color: var(--text-main);
   margin-bottom: 8px;
 }
 .reference-card {
-  background-color: #f9f9f9;
-  border: 1px solid #ebebeb;
+  background-color: var(--bg-ref-card);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 10px;
   margin-bottom: 8px;
   text-align: left;
+  transition:
+    background-color 0.3s,
+    border-color 0.3s;
 }
 .ref-card-header {
   display: flex;
@@ -1203,20 +1348,23 @@ const searchWeather = async () => {
   margin-bottom: 4px;
 }
 .ref-badge {
-  background-color: #ebebeb;
-  color: #222222;
+  background-color: var(--border-color);
+  color: var(--text-main);
   font-size: 0.7rem;
   font-weight: 700;
   padding: 2px 6px;
   border-radius: 4px;
+  transition:
+    background-color 0.3s,
+    color 0.3s;
 }
 .ref-name {
   font-size: 0.85rem;
-  color: #222222;
+  color: var(--text-main);
 }
 .ref-address {
   font-size: 0.75rem;
-  color: #767676;
+  color: var(--text-sub);
   margin: 0;
 }
 .loading-bubble {
@@ -1228,7 +1376,7 @@ const searchWeather = async () => {
 .loading-bubble .dot {
   width: 6px;
   height: 6px;
-  background-color: #767676;
+  background-color: var(--text-sub);
   border-radius: 50%;
   animation: bounce 1.4s infinite ease-in-out both;
 }
@@ -1250,19 +1398,28 @@ const searchWeather = async () => {
 }
 .chatbot-footer {
   padding: 16px;
-  border-top: 1px solid #ebebeb;
-  background-color: white;
+  border-top: 1px solid var(--border-color);
+  background-color: var(--bg-modal);
   display: flex;
   gap: 8px;
   align-items: center;
+  transition:
+    background-color 0.3s,
+    border-top 0.3s;
 }
 .chatbot-footer input {
   flex: 1;
-  border: 1px solid #ebebeb;
+  border: 1px solid var(--border-color);
   border-radius: 24px;
   padding: 12px 18px;
   outline: none;
   font-size: 0.9rem;
+  background-color: var(--input-bg);
+  color: var(--text-main);
+  transition:
+    background-color 0.3s,
+    border-color 0.3s,
+    color 0.3s;
 }
 .chatbot-footer input:focus {
   border-color: #ff385c;
@@ -1278,8 +1435,8 @@ const searchWeather = async () => {
   cursor: pointer;
 }
 .chatbot-footer button:disabled {
-  background-color: #ebebeb;
-  color: #767676;
+  background-color: var(--border-color);
+  color: var(--text-sub);
   cursor: not-allowed;
 }
 
@@ -1303,6 +1460,14 @@ const searchWeather = async () => {
     z-index: 1000 !important;
   }
 
+  .theme-toggle-btn {
+    bottom: 152px !important;
+    right: 20px !important;
+    width: 54px !important;
+    height: 54px !important;
+    z-index: 1000 !important;
+  }
+
   /* 모바일 전체화면 레이아웃 */
   .weather-modal,
   .chatbot-modal {
@@ -1317,5 +1482,17 @@ const searchWeather = async () => {
     border: none !important;
     z-index: 2500 !important;
   }
+}
+
+/* App.vue의 <style> 태그 안쪽에 추가 */
+
+html.dark .section-title {
+  color: #f1f5f9 !important; /* 무조건 밝은 미색으로 고정 */
+}
+
+/* 추가적으로 격자(grid) 안의 다른 제목들도 어둡다면 함께 처리 */
+html.dark .grid-section h2,
+html.dark .grid-section .section-title {
+  color: #f1f5f9 !important;
 }
 </style>
