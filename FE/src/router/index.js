@@ -22,7 +22,8 @@ const routes = [
     component: MapView
   },
   {
-    path: '/post/:id',
+    path: '/posts/:id',
+    alias: '/post/:id',
     name: 'Detail',
     component: DetailView,
     props: true

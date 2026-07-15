@@ -1,7 +1,8 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
+const route = useRoute();
 const router = useRouter();
 const posts = ref([]);
 const isLoading = ref(false);
@@ -38,6 +39,93 @@ const locationSearchCategory = ref('');
 const locationSearchKeyword = ref('');
 const loadedLocations = ref([]);
 const isLocationLoading = ref(false);
+
+const normalizeLocationId = (value) => {
+  const text = String(value ?? '').trim();
+  if (!/^\d+$/.test(text)) return '';
+  return Number(text) > 0 ? text : '';
+};
+
+const fetchLocationById = async (locationId) => {
+  if (!locationId) return null;
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/locations/${locationId}`);
+    if (!response.ok) return null;
+    return await response.json();
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+};
+
+const buildKakaoMapLink = (location) => {
+  if (!location) return 'https://map.kakao.com/';
+
+  const address = String(location.address || '').trim();
+  const name = String(location.name || '').trim();
+
+  // 주소 검색을 우선 사용해 실제 도로명/지번 위치로 이동한다.
+  if (address) {
+    const query = [address, name].filter(Boolean).join(' ');
+    return `https://map.kakao.com/?q=${encodeURIComponent(query)}`;
+  }
+
+  const mapx = Number(location.mapx);
+  const mapy = Number(location.mapy);
+  if (Number.isFinite(mapx) && Number.isFinite(mapy)) {
+    return `https://map.kakao.com/link/map/${encodeURIComponent(name || '명소')},${mapy},${mapx}`;
+  }
+
+  if (name) {
+    return `https://map.kakao.com/?q=${encodeURIComponent(name)}`;
+  }
+
+  return 'https://map.kakao.com/';
+};
+
+const buildLocationPostsRoute = (location) => {
+  const locationId = String(location?.id ?? '').trim();
+  if (!/^\d+$/.test(locationId)) {
+    return { path: '/posts' };
+  }
+  return { path: '/posts', query: { location_id: locationId } };
+};
+
+const syncLocationFilterFromRoute = async () => {
+  const routeLocationId = normalizeLocationId(route.query.location_id);
+
+  if (!routeLocationId) {
+    filterLocationId.value = '';
+    selectedFilterLocation.value = null;
+    return;
+  }
+
+  if (filterLocationId.value !== routeLocationId) {
+    filterLocationId.value = routeLocationId;
+  }
+
+  if (!selectedFilterLocation.value || String(selectedFilterLocation.value.id) !== routeLocationId) {
+    selectedFilterLocation.value = await fetchLocationById(Number(routeLocationId));
+  }
+};
+
+const syncRouteWithLocationFilter = async () => {
+  const currentLocationId = normalizeLocationId(route.query.location_id);
+  const nextLocationId = normalizeLocationId(filterLocationId.value);
+  if (currentLocationId === nextLocationId) return;
+
+  const nextQuery = { ...route.query };
+  if (nextLocationId) {
+    nextQuery.location_id = nextLocationId;
+  } else {
+    delete nextQuery.location_id;
+  }
+
+  await router.replace({
+    path: '/posts',
+    query: nextQuery,
+  });
+};
 
 const buildPostsUrl = () => {
   const params = new URLSearchParams();
@@ -135,7 +223,7 @@ const loadLocationsByRegionAndCategory = async () => {
   }
 };
 
-const selectLocation = (location) => {
+const selectLocation = async (location) => {
   if (locationModalScope.value === 'create') {
     newRegion.value = location.region;
     newLocationId.value = String(location.id);
@@ -145,13 +233,14 @@ const selectLocation = (location) => {
     filterRegion.value = location.region;
     filterLocationId.value = String(location.id);
     selectedFilterLocation.value = location;
-    fetchPosts();
+    await syncRouteWithLocationFilter();
+    await fetchPosts();
   }
 
   closeLocationModal();
 };
 
-const clearSelectedLocation = (scope) => {
+const clearSelectedLocation = async (scope) => {
   if (scope === 'create') {
     newLocationId.value = '';
     newThumbnailUrl.value = '';
@@ -161,7 +250,8 @@ const clearSelectedLocation = (scope) => {
 
   filterLocationId.value = '';
   selectedFilterLocation.value = null;
-  fetchPosts();
+  await syncRouteWithLocationFilter();
+  await fetchPosts();
 };
 
 watch(newRegion, (nextRegion) => {
@@ -173,17 +263,24 @@ watch(newRegion, (nextRegion) => {
   }
 });
 
-watch(filterRegion, (nextRegion) => {
+watch(filterRegion, async (nextRegion) => {
   if (!selectedFilterLocation.value) return;
   if (selectedFilterLocation.value.region !== nextRegion) {
     filterLocationId.value = '';
     selectedFilterLocation.value = null;
+    await syncRouteWithLocationFilter();
+    await fetchPosts();
   }
 });
 
-onMounted(async () => {
-  await fetchPosts();
-});
+watch(
+  () => route.query.location_id,
+  async () => {
+    await syncLocationFilterFromRoute();
+    await fetchPosts();
+  },
+  { immediate: true }
+);
 
 // 게시글 추가
 const addPost = async () => {
@@ -250,7 +347,11 @@ const addPost = async () => {
 };
 
 const goToDetail = (id) => {
-  router.push(`/post/${id}`);
+  const locationId = normalizeLocationId(filterLocationId.value);
+  router.push({
+    path: `/posts/${id}`,
+    query: locationId ? { location_id: locationId } : {},
+  });
 };
 </script>
 
@@ -260,8 +361,8 @@ const goToDetail = (id) => {
     <section class="write-accordion">
       <div class="accordion-header" @click="isFormOpen = !isFormOpen">
         <div class="header-text">
-          <h2>명소에 대한 생각이나 이야기를 공유해주세요!</h2>
-          <p>이곳을 클릭하여 동네의 숨겨진 이야기와 유용한 꿀팁을 들려주세요.</p>
+          <h2>명소에 대한 이야기를 남겨주세요!</h2>
+          <p>이곳을 클릭하여 이야기와 유용한 꿀팁을 들려주세요.</p>
         </div>
         <span class="arrow-icon" :class="{ open: isFormOpen }">▼</span>
       </div>
@@ -314,14 +415,22 @@ const goToDetail = (id) => {
             <div v-if="selectedNewLocation" class="selected-location-card">
               <strong>{{ selectedNewLocation.name }}</strong>
               <span>{{ selectedNewLocation.region }} · {{ selectedNewLocation.category }}</span>
-              <small>{{ selectedNewLocation.address || '주소 정보 없음' }}</small>
+              <small>{{ selectedNewLocation.address || '주소 정보 없음' }}</small>\
+              <a
+                class="location-link"
+                :href="buildKakaoMapLink(selectedNewLocation)"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                카카오지도로 이동
+              </a>\
             </div>
             <p v-else class="sub-label">명소를 선택하지 않아도 게시글 등록이 가능합니다.</p>
           </div>
 
           <div class="form-item">
             <label>이야기 본문</label>
-            <textarea v-model="newContent" placeholder="이 명소와 관련된 꿀팁이나 생각을 자유롭게 들려주세요."></textarea>
+            <textarea v-model="newContent" placeholder="꿀팁이나 생각을 자유롭게 들려주세요."></textarea>
           </div>
 
           <div class="form-item">
@@ -370,6 +479,14 @@ const goToDetail = (id) => {
         <strong>명소 조건: {{ selectedFilterLocation.name }}</strong>
         <span>{{ selectedFilterLocation.region }} · {{ selectedFilterLocation.category }}</span>
         <small>{{ selectedFilterLocation.address || '주소 정보 없음' }}</small>
+        <a
+          class="location-link"
+          :href="buildKakaoMapLink(selectedFilterLocation)"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          카카오지도로 이동
+        </a>
       </div>
 
       <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
@@ -636,6 +753,40 @@ const goToDetail = (id) => {
   line-height: 1.4;
 }
 
+.location-link {
+  color: var(--color-airbnb-red);
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.location-link:hover {
+  text-decoration: underline;
+}
+
+.location-link-row {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.location-link-btn {
+  color: var(--color-airbnb-dark);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  background-color: #f7f7f7;
+}
+
+.location-link-btn:hover {
+  background-color: #efefef;
+}
+
 .filter-card {
   margin-top: -6px;
   margin-bottom: 14px;
@@ -727,10 +878,19 @@ const goToDetail = (id) => {
   .grid-container {
     grid-template-columns: repeat(2, 1fr);
   }
+  .location-link {
+    align-self: flex-end;
+    margin-right:4px;
+  }
 }
 @media (max-width: 600px) {
   .grid-container {
     grid-template-columns: 1fr;
+  }
+  
+  .location-link {
+    align-self: flex-end;
+    margin-right:4px;
   }
 }
 

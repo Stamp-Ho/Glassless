@@ -36,11 +36,52 @@ const deletePassword = ref('');
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
+const buildListRouteTarget = () => {
+  const locationIdText = String(route.query.location_id ?? '').trim();
+  if (/^\d+$/.test(locationIdText) && Number(locationIdText) > 0) {
+    return { path: '/posts', query: { location_id: locationIdText } };
+  }
+  return { path: '/posts' };
+};
+
 const formatDateTime = (value) => {
   if (!value) return '-';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString('ko-KR');
+};
+
+const buildKakaoMapLink = (location) => {
+  if (!location) return 'https://map.kakao.com/';
+
+  const address = String(location.address || '').trim();
+  const name = String(location.name || '').trim();
+
+  // 주소 검색을 우선 사용해 실제 도로명/지번 위치로 이동한다.
+  if (address) {
+    const query = [address, name].filter(Boolean).join(' ');
+    return `https://map.kakao.com/?q=${encodeURIComponent(query)}`;
+  }
+
+  const mapx = Number(location.mapx);
+  const mapy = Number(location.mapy);
+  if (Number.isFinite(mapx) && Number.isFinite(mapy)) {
+    return `https://map.kakao.com/link/map/${encodeURIComponent(name || '명소')},${mapy},${mapx}`;
+  }
+
+  if (name) {
+    return `https://map.kakao.com/?q=${encodeURIComponent(name)}`;
+  }
+
+  return 'https://map.kakao.com/';
+};
+
+const buildLocationPostsRoute = (location) => {
+  const locationId = String(location?.id ?? '').trim();
+  if (!/^\d+$/.test(locationId)) {
+    return { path: '/posts' };
+  }
+  return { path: '/posts', query: { location_id: locationId } };
 };
 
 const filteredLocations = computed(() => {
@@ -265,7 +306,7 @@ const deletePost = async () => {
 
     alert('게시글이 삭제되었습니다.');
     isDeleteModalOpen.value = false;
-    router.push('/posts');
+    router.push(buildListRouteTarget());
   } catch (error) {
     console.error(error);
     alert(error.message || '삭제에 실패했습니다.');
@@ -281,7 +322,7 @@ onMounted(async () => {
 
 <template>
   <div class="detail-container">
-    <button class="btn-back" @click="router.push('/posts')">← 전체 목록으로 돌아가기</button>
+    <button class="btn-back" @click="router.push(buildListRouteTarget())">← 전체 목록으로 돌아가기</button>
 
     <div v-if="isLoading" class="state-message">게시글을 불러오는 중입니다...</div>
     <div v-else-if="errorMessage" class="state-message error">{{ errorMessage }}</div>
@@ -293,26 +334,32 @@ onMounted(async () => {
             <option v-for="cat in categoryOptions" :key="cat" :value="cat">{{ cat }}</option>
           </select>
           <span v-else class="detail-badge">{{ post.category }}</span>
-          <span class="detail-sub">지역: {{ post.region || '미지정' }}</span>
+          <span class="detail-sub location-top">{{ post.region || '미지정' }}</span>
         </div>
-        <div class="action-buttons">
-          <button v-if="!isEditMode" class="btn-secondary" @click="startEdit">수정</button>
-          <template v-else>
-            <button class="btn-secondary" @click="cancelEdit">취소</button>
-            <button class="btn-primary" :disabled="isSaving" @click="saveEdit">
-              {{ isSaving ? '저장 중...' : '수정 확정' }}
-            </button>
-          </template>
+        <div class="right-top-meta">
+          <div class="action-buttons" :class="{ 'mobile-corner': !isEditMode }">
+            <div v-if="!isEditMode" class="read-actions">
+              <button  class="btn-secondary btn-edit-compact" @click="startEdit">수정</button>
+              <button class="btn-danger" @click="openDeleteModal">삭제</button>
+            </div>
+            <template v-else>
+              <button class="btn-secondary" @click="cancelEdit">취소</button>
+              <button class="btn-primary" :disabled="isSaving" @click="saveEdit">
+                {{ isSaving ? '저장 중...' : '수정 확정' }}
+              </button>
+            </template>
+          </div>
         </div>
       </div>
       <h1 v-if="!isEditMode" class="detail-title">{{ post.title }}</h1>
       <input v-else v-model="editTitle" class="detail-title-input" type="text" maxlength="200" />
 
       <div class="detail-info">
-        <span>게시글 ID: {{ post.id }}</span>
         <span>작성 시각: {{ formatDateTime(post.created_at) }}</span>
         <span>수정 시각: {{ formatDateTime(post.updated_at) }}</span>
       </div>
+
+      
 
       <div v-if="post.thumbnail_url" class="detail-thumbnail-wrap">
         <img :src="post.thumbnail_url" alt="게시글 썸네일" class="detail-thumbnail" />
@@ -320,6 +367,31 @@ onMounted(async () => {
 
       <p v-if="!isEditMode" class="detail-desc">{{ post.content }}</p>
       <textarea v-else v-model="editContent" class="detail-desc-input" rows="8" maxlength="5000"></textarea>
+
+
+      <div v-if="!isEditMode && (selectedEditLocation || post.location_id)" class="selected-location-card detail-location-card">
+        <template v-if="selectedEditLocation">
+          <strong>{{ selectedEditLocation.name }}</strong>
+          <span>{{ selectedEditLocation.region }} · {{ selectedEditLocation.category }}</span>
+          <small>{{ selectedEditLocation.address || '주소 정보 없음' }}</small>
+          <div class="location-link-row">
+            <router-link class="location-link-btn" :to="buildLocationPostsRoute(selectedEditLocation)">
+              게시글 모아보기
+            </router-link>
+            <a
+              class="location-link"
+              :href="buildKakaoMapLink(selectedEditLocation)"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              카카오지도로 이동
+            </a>
+          </div>
+        </template>
+        <template v-else>
+          <span>명소 정보를 불러오지 못했습니다.</span>
+        </template>
+      </div>
 
       <div v-if="isEditMode" class="edit-location-block">
         <label>연결 명소</label>
@@ -345,10 +417,6 @@ onMounted(async () => {
       <div v-if="isEditMode" class="edit-password-row">
         <label>수정 비밀번호</label>
         <input v-model="editPassword" type="password" maxlength="100" placeholder="작성 시 비밀번호 입력" />
-      </div>
-
-      <div class="card-bottom-actions">
-        <button class="btn-danger" @click="openDeleteModal">삭제</button>
       </div>
     </div>
 
@@ -434,6 +502,9 @@ onMounted(async () => {
 .detail-meta-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
 .top-actions { align-items: flex-start; }
 .left-meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.right-top-meta { display: flex; flex-direction: row; align-items: flex-end; gap: 8px; }
+.location-top { text-align: right; }
+.read-actions { display: flex; gap: 8px; }
 .detail-badge { display: inline-block; background-color: #FFF0F2; padding: 6px 14px; border-radius: 20px; font-size: 0.9rem; font-weight: 600; color: var(--color-airbnb-red); }
 .detail-badge-select {
   background-color: #FFF0F2;
@@ -530,6 +601,47 @@ onMounted(async () => {
   line-height: 1.4;
 }
 
+.detail-location-card {
+  margin-top: 18px;
+}
+
+.location-link-row {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.location-link-btn {
+  color: var(--color-airbnb-dark);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  background-color: #f7f7f7;
+}
+
+.location-link-btn:hover {
+  background-color: #efefef;
+}
+
+.location-link {
+  color: var(--color-airbnb-red);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.location-link:hover {
+  text-decoration: underline;
+}
+
 .inline-edit-id {
   display: inline-flex;
   align-items: center;
@@ -562,7 +674,7 @@ onMounted(async () => {
   padding: 10px 12px;
 }
 
-.action-buttons { display: flex; gap: 8px; }
+.action-buttons { display: flex; gap: 8px; flex-wrap: nowrap; align-items: center; }
 .btn-primary,
 .btn-secondary,
 .btn-danger {
@@ -726,7 +838,6 @@ onMounted(async () => {
 @media (max-width: 640px) {
   .modal-actions,
   .edit-password-row,
-  .action-buttons,
   .location-picker-row {
     flex-direction: column;
     width: 100%;
@@ -736,10 +847,43 @@ onMounted(async () => {
     grid-template-columns: 1fr;
   }
 
-  .btn-primary,
-  .btn-secondary,
-  .btn-danger {
+  .modal-actions .btn-primary,
+  .modal-actions .btn-secondary,
+  .modal-actions .btn-danger {
     width: 100%;
+  }
+
+  .top-actions { position: relative; flex-wrap: nowrap; }
+
+  .right-top-meta {
+    align-items: flex-end;
+    width: auto;
+    flex-shrink: 0;
+  }
+
+  .left-meta {
+    min-width: 0;
+  }
+
+  .action-buttons.mobile-corner {
+    position: absolute;
+    top: 0;
+    right: 0;
+  }
+
+  .btn-edit-compact,
+  .read-actions .btn-danger,
+  .action-buttons .btn-primary,
+  .action-buttons .btn-secondary {
+    border-width: 1px;
+    padding: 6px 9px;
+    font-size: 0.78rem;
+    line-height: 1.2;
+  }
+  
+  .location-link {
+    align-self: flex-end;
+    margin-left:auto;
   }
 }
 </style>
