@@ -389,19 +389,30 @@ async def chat(payload: ChatRequest, db: AsyncSession = Depends(get_db)) -> Chat
             detail="OPENAI_API_KEY is not configured",
         )
 
-    # 1) Ask OpenAI to extract region and category from the user's text
-    orig_region, orig_categories, orig_excluded = await _extract_region_category_via_openai(query_text)
-
-    # Map extracted region to allowed canonical regions; default to 서울 if unmapped
-    mapped_region = _map_to_allowed_region(orig_region) if orig_region else None
-    if not mapped_region:
-        # try to infer from text as a fallback
+    # If user explicitly mentions a category (e.g. '레포츠'), prefer that and skip OpenAI extraction
+    explicit_cat = _infer_category(query_text)
+    if explicit_cat:
+        # Map region from text or default
         inferred = _infer_region(query_text)
         mapped_region = _map_to_allowed_region(inferred) if inferred else None
-    region = mapped_region if mapped_region else "서울"
-    categories = orig_categories if orig_categories else ["관광지"]
-    excluded_categories = orig_excluded if orig_excluded else []
-    extraction_source = "openai"
+        region = mapped_region if mapped_region else "서울"
+        categories = [explicit_cat]
+        excluded_categories = _detect_excluded_categories(query_text)
+        extraction_source = "heuristic"
+    else:
+        # 1) Ask OpenAI to extract region and category from the user's text
+        orig_region, orig_categories, orig_excluded = await _extract_region_category_via_openai(query_text)
+
+        # Map extracted region to allowed canonical regions; default to 서울 if unmapped
+        mapped_region = _map_to_allowed_region(orig_region) if orig_region else None
+        if not mapped_region:
+            # try to infer from text as a fallback
+            inferred = _infer_region(query_text)
+            mapped_region = _map_to_allowed_region(inferred) if inferred else None
+        region = mapped_region if mapped_region else "서울"
+        categories = orig_categories if orig_categories else ["관광지"]
+        excluded_categories = orig_excluded if orig_excluded else []
+        extraction_source = "openai"
 
     # detect excluded categories from user phrasing (e.g., '액티비티는 말고')
     # We allow OpenAI to supply excluded list; if absent, we can optionally detect heuristically.
