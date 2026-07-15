@@ -5,15 +5,18 @@ import { useRouter } from "vue-router";
 const router = useRouter();
 const previewPosts = ref([]);
 
+// 모달 및 상세 게시글 상태 관리
+const isModalOpen = ref(false);
+const detailedPost = ref(null);
+const isDetailLoading = ref(false);
+
 // .env 파일에 정의된 전역 환경 변수 가져오기 (https://glassless-be.onrender.com)
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 onMounted(async () => {
   try {
-    // 1. 전체 게시물 목록 엔드포인트로 단일 요청 전송
     const response = await fetch(`${BASE_URL}/api/posts`);
 
-    // 2. 422 Validation Error 발생 시 아무것도 출력 안 하도록 빈 배열 처리 후 종료
     if (response.status === 422) {
       previewPosts.value = [];
       return;
@@ -25,21 +28,61 @@ onMounted(async () => {
 
     const allPosts = await response.json();
 
-    // 3. 받아온 배열 데이터가 유효하다면 상위 4개만 슬라이스(slice)하여 바인딩
     if (Array.isArray(allPosts)) {
       previewPosts.value = allPosts.slice(0, 4);
     } else {
       previewPosts.value = [];
     }
   } catch (error) {
-    // 통신 실패 혹은 예외 상황 시 화면에 에러를 노출하지 않고 조용히 빈 화면 처리
     console.error("데이터 로드 실패 (422 처리 포함):", error);
     previewPosts.value = [];
   }
 });
 
+// 특정 게시물 클릭 시 상세 정보 모달 오픈 및 GET 요청
+const openDetailModal = async (postId) => {
+  isModalOpen.value = true;
+  isDetailLoading.value = true;
+  detailedPost.value = null;
+
+  try {
+    const response = await fetch(`${BASE_URL}/api/posts/${postId}`);
+
+    if (response.status === 422) {
+      console.warn("상세페이지 로드 실패: 422 Validation Error");
+      closeModal();
+      return;
+    }
+
+    if (!response.ok) {
+      throw new Error("상세 정보 로드 실패");
+    }
+
+    const data = await response.json();
+    detailedPost.value = data;
+  } catch (error) {
+    console.error("상세페이지 API 에러:", error);
+    closeModal();
+  } finally {
+    isDetailLoading.value = false;
+  }
+};
+
+// 모달 닫기
+const closeModal = () => {
+  isModalOpen.value = false;
+  detailedPost.value = null;
+};
+
 const goToPostList = () => {
   router.push("/posts");
+};
+
+// 날짜 포맷팅 함수 (yyyy-mm-dd hh:mm)
+const formatDate = (dateStr) => {
+  if (!dateStr) return "";
+  const date = new Date(dateStr);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 };
 </script>
 
@@ -64,7 +107,7 @@ const goToPostList = () => {
           v-for="post in previewPosts"
           :key="post.id"
           class="preview-card"
-          @click="goToPostList"
+          @click="openDetailModal(post.id)"
         >
           <div class="card-image-placeholder">
             <span class="badge">{{ post.region || "지역 정보 없음" }}</span>
@@ -76,6 +119,53 @@ const goToPostList = () => {
         </div>
       </div>
     </section>
+
+    <div v-if="isModalOpen" class="modal-backdrop" @click="closeModal">
+      <div class="modal-window" @click.stop>
+        <div v-if="isDetailLoading" class="modal-loading">
+          <span class="spinner"></span>
+          <p>이야기를 불러오는 중입니다...</p>
+        </div>
+
+        <div v-else-if="detailedPost" class="modal-content-wrapper">
+          <div class="modal-header">
+            <div class="modal-meta">
+              <span class="category-tag">{{ detailedPost.category }}</span>
+              <span class="location-text">📍 {{ detailedPost.region }}</span>
+            </div>
+            <button class="btn-close-modal" @click="closeModal">✕</button>
+          </div>
+
+          <div class="modal-body">
+            <h2 class="modal-post-title">{{ detailedPost.title }}</h2>
+
+            <div class="modal-post-date" v-if="detailedPost.created_at">
+              <span class="date-label">등록일</span>
+              <span class="date-value">{{
+                formatDate(detailedPost.created_at)
+              }}</span>
+              <span
+                v-if="detailedPost.created_at !== detailedPost.updated_at"
+                class="updated-badge"
+              >
+                (수정됨: {{ formatDate(detailedPost.updated_at) }})
+              </span>
+            </div>
+
+            <div class="modal-img-placeholder">
+              <span>🖼️ 로컬 추천 명소</span>
+            </div>
+
+            <p class="modal-post-content">{{ detailedPost.content }}</p>
+          </div>
+
+          <div class="modal-footer">
+            <div class="footer-left-placeholder"></div>
+            <button class="btn-confirm-action" @click="closeModal">확인</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </main>
 </template>
 
@@ -225,5 +315,227 @@ const goToPostList = () => {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* ==========================================
+   ✨ 모달창 (Modal) 디자인
+   ========================================== */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1100;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.modal-window {
+  width: 100%;
+  max-width: 680px;
+  background-color: white;
+  border-radius: 16px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  animation: modalScaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalScaleUp {
+  from {
+    transform: scale(0.95) translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+.modal-loading {
+  padding: 60px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  color: var(--color-airbnb-gray);
+  font-size: 0.95rem;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid var(--color-airbnb-red);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.modal-content-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  padding: 24px 28px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.modal-meta {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.category-tag {
+  background-color: var(--color-airbnb-dark);
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 6px;
+}
+
+.location-text {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-airbnb-gray);
+}
+
+.btn-close-modal {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  color: var(--color-airbnb-gray);
+  cursor: pointer;
+  padding: 4px;
+  transition: color 0.2s;
+}
+
+.btn-close-modal:hover {
+  color: var(--color-airbnb-dark);
+}
+
+/* 모달 바디 */
+.modal-body {
+  padding: 28px;
+  max-height: 440px;
+  overflow-y: auto;
+}
+
+.modal-post-title {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--color-airbnb-dark);
+  margin-bottom: 10px; /* 아래 등록일과 간격 최적화 */
+  line-height: 1.3;
+}
+
+/* 📅 신규 등록일 스타일링 */
+.modal-post-date {
+  font-size: 0.85rem;
+  color: var(--color-airbnb-gray);
+  margin-bottom: 24px; /* 본문 이미지와의 간격 확보 */
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.date-label {
+  font-weight: 700;
+  color: #a8a8a8;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  border: 1px solid #ebebeb;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.date-value {
+  font-weight: 500;
+  color: #666666;
+}
+
+.updated-badge {
+  font-size: 0.8rem;
+  color: var(--color-airbnb-red);
+  font-weight: 500;
+}
+
+.modal-img-placeholder {
+  width: 100%;
+  height: 240px;
+  background-color: #f3f3f3;
+  border-radius: 12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: var(--color-airbnb-gray);
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 24px;
+  border: 1px solid var(--color-border);
+}
+
+.modal-post-content {
+  font-size: 1.02rem;
+  color: #333333;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+/* 모달 푸터 */
+.modal-footer {
+  padding: 18px 28px;
+  border-top: 1px solid var(--color-border);
+  background-color: #fafafa;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.btn-confirm-action {
+  background-color: var(--color-airbnb-red);
+  color: white;
+  border: none;
+  padding: 10px 24px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: filter 0.2s;
+}
+
+.btn-confirm-action:hover {
+  filter: brightness(0.9);
+}
+
+@media (max-width: 600px) {
+  .modal-window {
+    border-radius: 12px;
+  }
+  .modal-post-title {
+    font-size: 1.3rem;
+  }
+  .modal-img-placeholder {
+    height: 180px;
+  }
 }
 </style>
