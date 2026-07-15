@@ -47,6 +47,7 @@ class PostResponse(BaseModel):
     thumbnail_url: str | None
     region: str | None
     rating: int | None = None
+    comments_count: int = 0
     created_at: datetime
     updated_at: datetime
 
@@ -62,5 +63,6 @@ class PostListItem(BaseModel):
     thumbnail_url: str | None
     region: str | None
     rating: int | None = None
+    comments_count: int = 0
     created_at: datetime
     updated_at: datetime

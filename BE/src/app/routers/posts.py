@@ -38,6 +38,7 @@ async def list_posts(
             thumbnail_url=post.thumbnail_url,
             region=post.region,
             rating=post.rating_score,
+            comments_count=post.comments_count,
             created_at=post.created_at,
             updated_at=post.updated_at,
         )
