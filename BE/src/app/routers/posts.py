@@ -52,18 +52,20 @@ async def get_post(post_id: int, db: AsyncSession = Depends(get_db)) -> Post:
     return post
 
 
-async def _ensure_location_exists(location_id: int | None, db: AsyncSession) -> None:
+async def _get_location(location_id: int | None, db: AsyncSession) -> Location | None:
     if location_id is None:
-        return
+        return None
 
-    result = await db.execute(select(Location.id).where(Location.id == location_id))
-    if result.scalar_one_or_none() is None:
+    result = await db.execute(select(Location).where(Location.id == location_id))
+    location = result.scalar_one_or_none()
+    if location is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Location not found")
+    return location
 
 
 @router.post("", response_model=PostResponse, status_code=status.HTTP_201_CREATED)
 async def create_post(payload: PostCreate, db: AsyncSession = Depends(get_db)) -> Post:
-    await _ensure_location_exists(payload.location_id, db)
+    location = await _get_location(payload.location_id, db)
 
     post = Post(
         title=payload.title.strip(),
@@ -71,7 +73,8 @@ async def create_post(payload: PostCreate, db: AsyncSession = Depends(get_db)) -
         password=payload.password,
         category=payload.category.value,
         location_id=payload.location_id,
-        region=payload.region.strip() if payload.region else None,
+        thumbnail_url=location.image_url if location else None,
+        region=location.region if location else (payload.region.strip() if payload.region else None),
     )
     db.add(post)
     await db.commit()
@@ -99,9 +102,15 @@ async def update_post(
         post.content = payload.content.strip()
     if payload.category is not None:
         post.category = payload.category.value
-    if payload.location_id is not None:
-        await _ensure_location_exists(payload.location_id, db)
-        post.location_id = payload.location_id
+    if "location_id" in payload.model_fields_set:
+        if payload.location_id is None:
+            post.location_id = None
+            post.thumbnail_url = None
+        else:
+            location = await _get_location(payload.location_id, db)
+            post.location_id = location.id
+            post.thumbnail_url = location.image_url
+            post.region = location.region
 
     await db.commit()
     await db.refresh(post)
