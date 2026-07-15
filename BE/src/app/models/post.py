@@ -31,6 +31,7 @@ class Post(Base):
     thumbnail_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     region: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     rating_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    comments_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
     @property
     def rating(self) -> int | None:
