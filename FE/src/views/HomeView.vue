@@ -5,11 +5,6 @@ import { useRouter } from "vue-router";
 const router = useRouter();
 const previewPosts = ref([]);
 
-// 모달 및 상세 게시글 상태 관리
-const isModalOpen = ref(false);
-const detailedPost = ref(null);
-const isDetailLoading = ref(false);
-
 // .env 파일에 정의된 전역 환경 변수 가져오기
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -39,50 +34,9 @@ onMounted(async () => {
   }
 });
 
-// 특정 게시물 클릭 시 상세 정보 모달 오픈 및 GET 요청
-const openDetailModal = async (postId) => {
-  isModalOpen.value = true;
-  isDetailLoading.value = true;
-  detailedPost.value = null;
-
-  try {
-    const response = await fetch(`${BASE_URL}/api/posts/${postId}`);
-
-    if (response.status === 422) {
-      console.warn("상세페이지 로드 실패: 422 Validation Error");
-      closeModal();
-      return;
-    }
-
-    if (!response.ok) {
-      throw new Error("상세 정보 로드 실패");
-    }
-
-    const data = await response.json();
-    detailedPost.value = data;
-  } catch (error) {
-    console.error("상세페이지 API 에러:", error);
-    closeModal();
-  } finally {
-    isDetailLoading.value = false;
-  }
-};
-
-// 모달 닫기
-const closeModal = () => {
-  isModalOpen.value = false;
-  detailedPost.value = null;
-};
-
-const goToPostList = () => {
-  router.push("/posts");
-};
-
-// 날짜 포맷팅 함수 (yyyy-mm-dd hh:mm)
-const formatDate = (dateStr) => {
-  if (!dateStr) return "";
-  const date = new Date(dateStr);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+// 게시물 상세 페이지로 이동
+const goToPostDetail = (postId) => {
+  router.push(`/posts/${postId}`);
 };
 </script>
 
@@ -107,9 +61,17 @@ const formatDate = (dateStr) => {
           v-for="post in previewPosts"
           :key="post.id"
           class="preview-card"
-          @click="openDetailModal(post.id)"
+          @click="goToPostDetail(post.id)"
         >
-          <div class="card-image-placeholder">
+          <div class="card-image-container">
+            <img
+              v-if="post.thumbnail_url"
+              :src="post.thumbnail_url"
+              :alt="post.title"
+              class="card-image"
+            />
+            <div v-else class="card-image-placeholder-bg"></div>
+
             <span class="badge">{{ post.region || "지역 정보 없음" }}</span>
           </div>
           <div class="card-info">
@@ -119,53 +81,6 @@ const formatDate = (dateStr) => {
         </div>
       </div>
     </section>
-
-    <div v-if="isModalOpen" class="modal-backdrop" @click="closeModal">
-      <div class="modal-window" @click.stop>
-        <div v-if="isDetailLoading" class="modal-loading">
-          <span class="spinner"></span>
-          <p>이야기를 불러오는 중입니다...</p>
-        </div>
-
-        <div v-else-if="detailedPost" class="modal-content-wrapper">
-          <div class="modal-header">
-            <div class="modal-meta">
-              <span class="category-tag">{{ detailedPost.category }}</span>
-              <span class="location-text">📍 {{ detailedPost.region }}</span>
-            </div>
-            <button class="btn-close-modal" @click="closeModal">✕</button>
-          </div>
-
-          <div class="modal-body">
-            <h2 class="modal-post-title">{{ detailedPost.title }}</h2>
-
-            <div class="modal-post-date" v-if="detailedPost.created_at">
-              <span class="date-label">등록일</span>
-              <span class="date-value">{{
-                formatDate(detailedPost.created_at)
-              }}</span>
-              <span
-                v-if="detailedPost.created_at !== detailedPost.updated_at"
-                class="updated-badge"
-              >
-                (수정됨: {{ formatDate(detailedPost.updated_at) }})
-              </span>
-            </div>
-
-            <div class="modal-img-placeholder">
-              <span>🖼️ 로컬 추천 명소</span>
-            </div>
-
-            <p class="modal-post-content">{{ detailedPost.content }}</p>
-          </div>
-
-          <div class="modal-footer">
-            <div class="footer-left-placeholder"></div>
-            <button class="btn-confirm-action" @click="closeModal">확인</button>
-          </div>
-        </div>
-      </div>
-    </div>
   </main>
 </template>
 
@@ -279,23 +194,63 @@ const formatDate = (dateStr) => {
   transform: translateY(-4px);
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
 }
-
-.card-image-placeholder {
-  height: 150px;
-  background-color: #ebebeb;
+/* 이미지 컨테이너 (비율 유지용) */
+.card-image-container {
   position: relative;
-  display: flex;
-  align-items: flex-end;
-  padding: 12px;
+  width: 100%;
+  height: 180px; /* 원하시는 높이로 조절하세요 */
+  overflow: hidden;
+  border-radius: 8px 8px 0 0; /* 카드 윗부분만 둥글게 */
+  background-color: #f3f3f3; /* 이미지 로딩 전/실패 시 배경색 */
 }
 
+/* 실제 이미지 스타일 */
+.card-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* 이미지가 찌그러지지 않고 꽉 차게 비율 조절 */
+  display: block;
+}
+
+/* 이미지가 없을 때 보여줄 배경 */
+.card-image-placeholder-bg {
+  width: 100%;
+  height: 100%;
+  background-color: #e0e0e0; /* 연한 회색으로 채우기 */
+}
+
+/* 2. [수정됨] 미리보기 카드 지역 배지 스타일 */
 .badge {
-  background-color: white;
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  /* 위치 설정 */
+  position: absolute; /* 중요: 부모 컨테이너 위로 올림 */
+  top: 12px; /* 위에서부터 간격 */
+  left: 12px; /* 왼쪽에서부터 간격 */
+  z-index: 10; /* 이미지보다 위에 보이도록 설정 */
+
+  /* 📌 버튼 모양 스타일 (이 부분을 적용하세요) */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px; /* 위아래, 좌우 여백으로 버튼 모양 생성 */
+
+  /* 색상 및 글꼴 */
+  background-color: rgba(
+    59,
+    130,
+    246,
+    0.9
+  ); /* 모달 태그와 비슷한 색상 (파란색 계열) */
+  color: white; /* 글자색: 흰색 */
+  font-size: 12px; /* 글자 크기 */
+  font-weight: 600; /* 글자 두께 */
+
+  /* 형태 설정 */
+  border-radius: 20px; /* 완전 둥근 모서리 */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* 약간의 그림자 효과 */
+
+  /* 기타 설정 */
+  pointer-events: none; /* 배지 클릭 시 카드가 클릭되도록 설정 */
+  white-space: nowrap; /* 글자가 줄바꿈되지 않도록 설정 */
 }
 
 .card-info {
@@ -318,213 +273,6 @@ const formatDate = (dateStr) => {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-
-/* ==========================================
-    ✨ 모달창 (Modal) 디자인
-   ========================================== */
-.modal-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(4px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1100;
-  padding: 20px;
-  box-sizing: border-box;
-}
-
-.modal-window {
-  width: 100%;
-  max-width: 680px;
-  background-color: white;
-  border-radius: 16px;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.3);
-  overflow: hidden;
-  animation: modalScaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes modalScaleUp {
-  from {
-    transform: scale(0.95) translateY(10px);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1) translateY(0);
-    opacity: 1;
-  }
-}
-
-.modal-loading {
-  padding: 60px 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  color: var(--color-airbnb-gray);
-  font-size: 0.95rem;
-}
-
-.spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid #f3f3f3;
-  border-top: 3px solid var(--color-airbnb-red);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-.modal-content-wrapper {
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-header {
-  padding: 24px 28px 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.modal-meta {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.category-tag {
-  background-color: var(--color-airbnb-dark);
-  color: white;
-  font-size: 0.8rem;
-  font-weight: 700;
-  padding: 4px 12px;
-  border-radius: 6px;
-}
-
-.location-text {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--color-airbnb-gray);
-}
-
-.btn-close-modal {
-  background: none;
-  border: none;
-  font-size: 1.25rem;
-  color: var(--color-airbnb-gray);
-  cursor: pointer;
-  padding: 4px;
-  transition: color 0.2s;
-}
-
-.btn-close-modal:hover {
-  color: var(--color-airbnb-dark);
-}
-
-.modal-body {
-  padding: 28px;
-  max-height: 440px;
-  overflow-y: auto;
-}
-
-.modal-post-title {
-  font-size: 1.6rem;
-  font-weight: 800;
-  color: var(--color-airbnb-dark);
-  margin-bottom: 10px;
-  line-height: 1.3;
-}
-
-.modal-post-date {
-  font-size: 0.85rem;
-  color: var(--color-airbnb-gray);
-  margin-bottom: 24px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.date-label {
-  font-weight: 700;
-  color: #a8a8a8;
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  border: 1px solid #ebebeb;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.date-value {
-  font-weight: 500;
-  color: #666666;
-}
-
-.updated-badge {
-  font-size: 0.8rem;
-  color: var(--color-airbnb-red);
-  font-weight: 500;
-}
-
-.modal-img-placeholder {
-  width: 100%;
-  height: 240px;
-  background-color: #f3f3f3;
-  border-radius: 12px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  color: var(--color-airbnb-gray);
-  font-weight: 600;
-  font-size: 0.95rem;
-  margin-bottom: 24px;
-  border: 1px solid var(--color-border);
-}
-
-.modal-post-content {
-  font-size: 1.02rem;
-  color: #333333;
-  line-height: 1.7;
-  white-space: pre-wrap;
-}
-
-.modal-footer {
-  padding: 18px 28px;
-  border-top: 1px solid var(--color-border);
-  background-color: #fafafa;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.btn-confirm-action {
-  background-color: var(--color-airbnb-red);
-  color: white;
-  border: none;
-  padding: 10px 24px;
-  font-size: 0.9rem;
-  font-weight: 700;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: filter 0.2s;
-}
-
-.btn-confirm-action:hover {
-  filter: brightness(0.9);
 }
 /* 1. 태블릿 화면 (1024px 이하) */
 @media (max-width: 1024px) {
