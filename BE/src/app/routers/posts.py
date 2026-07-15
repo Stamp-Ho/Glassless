@@ -35,6 +35,7 @@ async def list_posts(
             content=post.content[:30],
             category=PostCategory(post.category),
             location_id=post.location_id,
+            thumbnail_url=post.thumbnail_url,
             region=post.region,
             created_at=post.created_at,
             updated_at=post.updated_at,
