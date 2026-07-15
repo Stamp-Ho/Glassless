@@ -1,55 +1,34 @@
 <script setup>
 import { ref, onMounted } from "vue";
 
-// 카카오 지도 또는 다른 지도 객체용 상태 정의 (순수 자바스크립트)
-const mapContainer = ref(null);
-const searchQuery = ref("");
-
-onMounted(() => {
-  // 지도 초기화 로직이 들어가는 곳입니다.
-  console.log("지도 컴포넌트 마운트 완료");
-});
-
-const handleSearch = () => {
-  if (!searchQuery.value.trim()) return;
-  console.log("검색어:", searchQuery.value);
-};
-</script>
-
-<template>
-  <div class="map-search-layout">
-    <div class="search-bar-container">
-      <input
-        v-model="searchQuery"
-        type="text"
-        placeholder="장소, 주소, 키워드 검색"
-        @keyup.enter="handleSearch"
-      />
-      <button @click="handleSearch">검색</button>
-    </div>
-
-    <div ref="mapContainer" class="map-render-zone"></div>
-import { ref } from 'vue';
-
-const searchRegion = ref('');
+// 1. 상태 정의 (사이드바 검색 필터용)
+const searchRegion = ref("");
 const selectedActivities = ref([]);
 
 const activities = [
-  { id: 'cafe', label: '☕ 감성 카페 탐방' },
-  { id: 'trekking', label: '🥾 하이킹/트래킹' },
-  { id: 'ocean', label: '🏖️ 해변/수상 레저' },
-  { id: 'museum', label: '🏛️ 역사/박물관' },
-  { id: 'night', label: '🌃 야경 명소' },
+  { id: "cafe", label: "☕ 감성 카페 탐방" },
+  { id: "trekking", label: "🥾 하이킹/트래킹" },
+  { id: "ocean", label: "🏖️ 해변/수상 레저" },
+  { id: "museum", label: "🏛️ 역사/박물관" },
+  { id: "night", label: "🌃 야경 명소" },
 ];
 
+// 2. 지도 컨테이너 상태 정의 (추후 API 연결용)
+const mapContainer = ref(null);
+
+onMounted(() => {
+  console.log("지도 뷰포트 준비 완료");
+});
+
+// 3. 기능 처리 함수들
 const handleSearch = () => {
   alert(
-    `검색 요청\n지역: ${searchRegion.value || '전체'}\n선택한 활동: ${selectedActivities.value.join(', ') || '없음'}`,
+    `검색 요청\n지역: ${searchRegion.value || "전체"}\n선택한 활동: ${selectedActivities.value.join(", ") || "없음"}`,
   );
 };
 
 const resetFilters = () => {
-  searchRegion.value = '';
+  searchRegion.value = "";
   selectedActivities.value = [];
 };
 </script>
@@ -103,14 +82,16 @@ const resetFilters = () => {
       </div>
     </aside>
 
-    <main class="map-viewport">
+    <main class="map-viewport" ref="mapContainer">
       <div class="map-placeholder">
         <div class="map-guide-card">
           <span class="map-icon">🗺️</span>
           <h3>여기는 실시간 지도 영역입니다</h3>
           <p>
             현재 선택된 필터에 매칭되는 명소들이 지도 위에 마커로 표시됩니다.<br />
-            <span class="highlight">(추후 Kakao Maps 또는 Google Maps API 장착 공간)</span>
+            <span class="highlight"
+              >(추후 Kakao Maps 또는 Google Maps API 장착 공간)</span
+            >
           </p>
         </div>
       </div>
@@ -119,19 +100,19 @@ const resetFilters = () => {
 </template>
 
 <style scoped>
+/* 메인 아웃라인 레이아웃 설정 */
 .map-search-layout {
-  position: relative;
-  width: 100%;
-  height: calc(100vh - 80px); /* 헤더 높이를 제외한 전체 화면 */
   display: flex;
+  width: 100%;
   height: calc(100vh - 73px);
   overflow: hidden;
 }
 
+/* 왼쪽 사이드바 디자인 */
 .search-sidebar {
   width: 380px;
   background-color: white;
-  border-right: 1px solid var(--color-border);
+  border-right: 1px solid var(--color-border, #ebebeb);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -146,12 +127,12 @@ const resetFilters = () => {
   font-weight: 800;
   line-height: 1.3;
   margin-bottom: 8px;
-  color: var(--color-airbnb-dark);
+  color: var(--color-airbnb-dark, #222222);
 }
 
 .sidebar-header p {
   font-size: 0.88rem;
-  color: var(--color-airbnb-gray);
+  color: var(--color-airbnb-gray, #767676);
   line-height: 1.4;
 }
 
@@ -173,105 +154,117 @@ const resetFilters = () => {
   font-size: 0.85rem;
   font-weight: 700;
   text-transform: uppercase;
-  color: var(--color-airbnb-dark);
+  color: var(--color-airbnb-dark, #222222);
   letter-spacing: 0.5px;
 }
 
+/* 지역 입력 박스 */
 .input-wrapper input {
   width: 100%;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border, #ebebeb);
   border-radius: 10px;
   padding: 14px 16px;
   font-size: 0.95rem;
   outline: none;
-  transition: border-color 0.2s;
+  transition:
+    border-color 0.2s,
+    background-color 0.2s;
   background-color: #fafafa;
+  box-sizing: border-box;
 }
 
 .input-wrapper input:focus {
-  border-color: var(--color-airbnb-red);
+  border-color: var(--color-airbnb-red, #ff5a5f);
   background-color: white;
 }
 
+/* 체크박스 목록 */
 .activity-grid {
   display: flex;
   flex-direction: column;
+  gap: 10px;
 }
 
-.search-bar-container {
-  position: absolute;
-  top: 20px;
-  left: 20px;
-  z-index: 10;
+.activity-checkbox-card {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border, #ebebeb);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
   background-color: white;
 }
 
-.activity-checkbox-card input[type='checkbox'] {
+.activity-checkbox-card input[type="checkbox"] {
   width: 18px;
   height: 18px;
-  accent-color: var(--color-airbnb-red);
+  accent-color: var(--color-airbnb-red, #ff5a5f);
   cursor: pointer;
 }
 
 .activity-checkbox-card span {
   font-size: 0.9rem;
   font-weight: 500;
-  color: var(--color-airbnb-dark);
+  color: var(--color-airbnb-dark, #222222);
 }
 
 .activity-checkbox-card:hover {
   background-color: #fafafa;
-  border-color: var(--color-airbnb-gray);
+  border-color: var(--color-airbnb-gray, #767676);
 }
 
 .activity-checkbox-card.checked {
-  border-color: var(--color-airbnb-red);
+  border-color: var(--color-airbnb-red, #ff5a5f);
   background-color: #fff0f2;
 }
 
+/* 하단 버튼 및 액션 스타일 */
 .sidebar-actions {
   display: flex;
   gap: 12px;
   margin-top: 32px;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-border, #ebebeb);
   padding-top: 20px;
 }
 
 .btn-reset {
-  background: none;
-  border: 1px solid var(--color-border);
+  flex: 1;
+  background: white;
+  border: 1px solid var(--color-border, #ebebeb);
+  padding: 14px;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.btn-reset:hover {
+  background-color: #f5f5f5;
 }
 
-.search-bar-container input {
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  outline: none;
-}
-
-.search-bar-container button {
-  padding: 8px 16px;
+.btn-search {
+  flex: 2;
   background-color: var(--color-airbnb-red, #ff5a5f);
   color: white;
   border: none;
-  border-radius: 4px;
+  padding: 14px;
+  border-radius: 8px;
+  font-weight: 700;
   cursor: pointer;
-  font-weight: bold;
+  box-shadow: 0 4px 12px rgba(255, 90, 95, 0.2);
+  transition:
+    transform 0.1s,
+    filter 0.2s;
 }
-
-.map-render-zone {
-  flex: 1;
-  width: 100%;
-  height: 100%;
-  background-color: #e5e3df; /* 지도 로드 전 임시 배경색 */
 .btn-search:hover {
   filter: brightness(0.9);
 }
+.btn-search:active {
+  transform: scale(0.98);
+}
 
+/* 오른쪽 지도 전용 뷰포트 스타일 */
 .map-viewport {
   flex: 1;
   height: 100%;
@@ -282,9 +275,13 @@ const resetFilters = () => {
 .map-placeholder {
   width: 100%;
   height: 100%;
-  background-image: radial-gradient(circle, #cfddd8 10%, transparent 10.5%), radial-gradient(circle, #cfddd8 10%, transparent 10.5%);
+  background-image:
+    radial-gradient(circle, #cfddd8 10%, transparent 10.5%),
+    radial-gradient(circle, #cfddd8 10%, transparent 10.5%);
   background-size: 24px 24px;
-  background-position: 0 0, 12px 12px;
+  background-position:
+    0 0,
+    12px 12px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -296,7 +293,7 @@ const resetFilters = () => {
   background-color: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
   padding: 40px;
-  border-radius: var(--radius-airbnb);
+  border-radius: 12px;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.08);
   text-align: center;
   max-width: 460px;
@@ -311,13 +308,13 @@ const resetFilters = () => {
 .map-guide-card h3 {
   font-size: 1.25rem;
   font-weight: 700;
-  color: var(--color-airbnb-dark);
+  color: var(--color-airbnb-dark, #222222);
   margin-bottom: 12px;
 }
 
 .map-guide-card p {
   font-size: 0.9rem;
-  color: var(--color-airbnb-gray);
+  color: var(--color-airbnb-gray, #767676);
   line-height: 1.6;
 }
 
@@ -325,10 +322,11 @@ const resetFilters = () => {
   display: inline-block;
   margin-top: 12px;
   font-size: 0.8rem;
-  color: var(--color-airbnb-red);
+  color: var(--color-airbnb-red, #ff5a5f);
   font-weight: 600;
 }
 
+/* 태블릿 및 모바일용 반응형 스타일 */
 @media (max-width: 768px) {
   .map-search-layout {
     flex-direction: column;
@@ -340,7 +338,7 @@ const resetFilters = () => {
     width: 100%;
     height: auto;
     border-right: none;
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border, #ebebeb);
   }
 
   .map-viewport {
