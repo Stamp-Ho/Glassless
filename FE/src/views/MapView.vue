@@ -27,7 +27,6 @@ const resetFilters = () => {
   searchRegion.value = "";
   selectedActivities.value = [];
 };
-</script>
 
 <template>
   <div class="map-search-layout">
@@ -72,12 +71,13 @@ const resetFilters = () => {
         </div>
       </div>
 
-      <div class="sidebar-actions">
-        <button class="btn-reset" @click="resetFilters">필터 초기화</button>
-        <button class="btn-search" @click="handleSearch">조건 검색</button>
-      </div>
-    </aside>
+const resetSelectedLocation = () => {
+  selectedLocation.value = null;
+};
+</script>
 
+<template>
+  <div class="map-search-layout">
     <main class="map-viewport">
       <div class="map-placeholder">
         <div class="map-guide-card">
@@ -96,9 +96,8 @@ const resetFilters = () => {
 </template>
 
 <style scoped>
-/* 좌측 고정 사이드바 + 우측 꽉 찬 지도 구성을 위한 그리드 레이아웃 */
 .map-search-layout {
-  display: flex;
+  position: relative;
   height: calc(100vh - 73px); /* 헤더 높이를 뺀 나머지 화면을 꽉 채움 */
   overflow: hidden;
 }
@@ -225,7 +224,7 @@ const resetFilters = () => {
   background: none;
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  padding: 14px 20px;
+  padding: 10px 14px;
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
@@ -239,12 +238,11 @@ const resetFilters = () => {
 }
 
 .btn-search {
-  flex: 1;
   background-color: var(--color-airbnb-red);
   color: white;
   border: none;
   border-radius: 8px;
-  padding: 14px 20px;
+  padding: 10px 16px;
   font-size: 0.9rem;
   font-weight: 700;
   cursor: pointer;
@@ -255,9 +253,8 @@ const resetFilters = () => {
   filter: brightness(0.9);
 }
 
-/* 2. 우측 지도 영역 스타일링 (화면 꽉 차게 설정) */
 .map-viewport {
-  flex: 1;
+  width: 100%;
   height: 100%;
   background-color: #e3ece9; /* 세련된 미색 지도 배경 */
   position: relative;
@@ -307,14 +304,114 @@ const resetFilters = () => {
   font-size: 0.9rem;
   color: var(--color-airbnb-gray);
   line-height: 1.6;
+  margin-bottom: 18px;
 }
 
-.highlight {
-  display: inline-block;
-  margin-top: 12px;
-  font-size: 0.8rem;
-  color: var(--color-airbnb-red);
-  font-weight: 600;
+.selected-location-panel {
+  margin-top: 20px;
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
+  padding: 12px;
+  text-align: left;
+  background-color: #fafafa;
+}
+
+.selected-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.selected-location-panel h4 {
+  margin: 0 0 6px;
+}
+
+.selected-location-panel p,
+.selected-location-panel small {
+  margin: 0;
+  color: var(--color-airbnb-gray);
+}
+
+.search-modal-overlay {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  padding: 20px;
+}
+
+.search-modal {
+  width: min(760px, 100%);
+  max-height: min(86vh, 900px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background-color: white;
+  border-radius: 14px;
+  border: 1px solid var(--color-border);
+  padding: 20px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.search-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.search-modal-header h3 {
+  margin: 0;
+}
+
+.search-controls-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 10px;
+}
+
+.search-controls-row select,
+.keyword-input {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.92rem;
+}
+
+.helper-text {
+  margin: 0;
+  color: var(--color-airbnb-gray);
+}
+
+.location-results-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  border-top: 1px solid #efefef;
+}
+
+.location-results-list li {
+  padding: 12px 4px;
+  border-bottom: 1px solid #efefef;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.location-results-list li:hover {
+  background-color: #f8f8f8;
+}
+
+.location-results-list span,
+.location-results-list small {
+  color: var(--color-airbnb-gray);
 }
 
 /* 모바일/태블릿 반응형 (화면이 많이 좁아지면 가로 배치에서 세로 배치 구조로 자동 전환) */
@@ -334,6 +431,10 @@ const resetFilters = () => {
 
   .map-viewport {
     height: 400px;
+  }
+
+  .search-controls-row {
+    grid-template-columns: 1fr;
   }
 }
 </style>
