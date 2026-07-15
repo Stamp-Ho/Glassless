@@ -2,9 +2,6 @@
 import { ref, nextTick } from "vue";
 import CommonHeader from "./components/CommonHeader.vue";
 
-// ===================================================
-// 1. 기존 챗봇 상태 및 로직 (그대로 유지)
-// ===================================================
 const isChatOpen = ref(false);
 const chatMessage = ref("");
 const isLoading = ref(false);
@@ -21,7 +18,7 @@ const chatHistory = ref([
 const toggleChat = async () => {
   isChatOpen.value = !isChatOpen.value;
   if (isChatOpen.value) {
-    isWeatherOpen.value = false; // 챗봇 열릴 때 날씨 창 닫기
+    isWeatherOpen.value = false;
     await scrollToBottom();
   }
 };
@@ -57,12 +54,12 @@ const sendChat = async () => {
     if (response.status === 422) {
       chatHistory.value.push({
         sender: "bot",
-        text: "🤖 챗봇이 적절한 답변을 생각하지 못했습니다. 죄송합니다.",
+        text: "🤖 챗봇 답변 생성에 실패했습니다.",
       });
       return;
     }
 
-    if (!response.ok) throw new Error("서버 응답 불안정");
+    if (!response.ok) throw new Error("서버 불안정");
 
     const data = await response.json();
     chatHistory.value.push({
@@ -71,10 +68,10 @@ const sendChat = async () => {
       references: data.references || [],
     });
   } catch (error) {
-    console.error("챗봇 API 통신 오류:", error);
+    console.error(error);
     chatHistory.value.push({
       sender: "bot",
-      text: "🤖 챗봇이 적절한 답변을 생각하지 못했습니다. 죄송합니다.",
+      text: "🤖 죄송합니다. 답변 중 오류가 발생했습니다.",
     });
   } finally {
     isLoading.value = false;
@@ -102,28 +99,23 @@ const extractRegion = (text) => {
   return "";
 };
 
-// ===================================================
-// 2. ☀️ [OpenWeatherMap API 전용] 실시간 날씨 로직
-// ===================================================
 const isWeatherOpen = ref(false);
 const inputCity = ref("");
 const isWeatherLoading = ref(false);
 const weatherResult = ref(null);
 
-// .env 파일의 OpenWeatherMap API 키 로드
 const WEATHER_API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY;
 const WEATHER_BASE_URL = "https://api.openweathermap.org/data/2.5/weather";
 
 const toggleWeather = () => {
   isWeatherOpen.value = !isWeatherOpen.value;
   if (isWeatherOpen.value) {
-    isChatOpen.value = false; // 날씨 열릴 때 챗봇 창 닫기
+    isChatOpen.value = false;
     weatherResult.value = null;
     inputCity.value = "";
   }
 };
 
-// 한국어 도시명을 OpenWeatherMap용 영문 이름 및 정식 명칭으로 매핑
 const convertToEnglishCity = (cityTxt) => {
   const city = cityTxt.trim();
   if (city.includes("서울")) return { eng: "Seoul", kor: "서울특별시" };
@@ -135,100 +127,76 @@ const convertToEnglishCity = (cityTxt) => {
   if (city.includes("광주")) return { eng: "Gwangju", kor: "광주광역시" };
   if (city.includes("울산")) return { eng: "Ulsan", kor: "울산광역시" };
   if (city.includes("경기") || city.includes("수원"))
-    return { eng: "Suwon", kor: "경기도(수원 기준)" };
+    return { eng: "Suwon", kor: "경기도" };
   if (city.includes("강원") || city.includes("춘천"))
-    return { eng: "Chuncheon", kor: "강원도(춘천 기준)" };
-  if (city.includes("충북") || city.includes("청주"))
-    return { eng: "Cheongju", kor: "충청북도" };
-  if (city.includes("충남") || city.includes("천안"))
-    return { eng: "Cheonan", kor: "충청남도" };
-  if (city.includes("전북") || city.includes("전주"))
-    return { eng: "Jeonju", kor: "전라북도" };
-  if (city.includes("전남") || city.includes("여수"))
-    return { eng: "Yeosu", kor: "전라남도" };
-  if (city.includes("경북") || city.includes("포항"))
-    return { eng: "Pohang", kor: "경상북도" };
-
-  // 매칭되는 한글명이 없으면 입력한 영문을 그대로 통신에 시도
+    return { eng: "Chuncheon", kor: "강원도" };
+  if (city.includes("충북")) return { eng: "Cheongju", kor: "충청북도" };
+  if (city.includes("충남")) return { eng: "Cheonan", kor: "충청남도" };
+  if (city.includes("전북")) return { eng: "Jeonju", kor: "전라북도" };
+  if (city.includes("전남")) return { eng: "Yeosu", kor: "전라남도" };
+  if (city.includes("경북")) return { eng: "Pohang", kor: "경상북도" };
   return { eng: city, kor: city };
 };
 
-// OpenWeatherMap의 날씨 상태 코드를 한글 및 이모지로 매핑
 const getWeatherStatus = (statusInfo) => {
   const main = statusInfo.main.toLowerCase();
-
   if (main.includes("clear")) return "맑음 ☀️";
   if (main.includes("cloud")) return "구름 조금 ☁️";
   if (main.includes("rain")) return "비 🌧️";
   if (main.includes("drizzle")) return "이슬비 🌦️";
-  if (main.includes("thunderstorm")) return "천둥번개 ⚡";
+  if (main.includes("thunderstorm")) return "천둥 ⚡";
   if (main.includes("snow")) return "눈 ❄️";
   if (main.includes("mist") || main.includes("fog") || main.includes("haze"))
     return "안개 🌫️";
-
   return "맑음/흐림 🌤️";
 };
 
-// 실시간 날씨 기반 지능형 가이드 코멘트 생성
 const generateWeatherComment = (statusStr, tempNum) => {
-  if (statusStr.includes("비") || statusStr.includes("이슬비")) {
-    return "현재 비가 내리고 있어 외출 시 우산이 필수입니다. GlassLESS 실내 추천 명소나 감성 카페 코스를 둘러보세요! ☕";
-  }
-  if (statusStr.includes("눈")) {
-    return "눈이 내려 길이 미끄러울 수 있으니 이동 시 안전에 주의하세요. 실내 활동 위주로 일정을 잡으시는 걸 권장합니다. ☃️";
-  }
-  if (tempNum >= 28) {
-    return `현재 기온이 ${tempNum}°C로 다소 무더운 날씨입니다. 시원한 실내 실증 명소나 해변가 주변 여정을 계획해 보세요!`;
-  }
-  if (tempNum <= 5) {
-    return `현재 기온이 ${tempNum}°C로 날씨가 많이 춥습니다. 두꺼운 외투를 챙기시고, 실내 가이드 시설 위주로 둘러보세요.`;
-  }
-  return "야외 활동을 즐기기에 매우 쾌적한 날씨입니다! 지금 바로 GlassLESS 지도를 열고 여행을 떠나보세요. 🗺️";
+  if (statusStr.includes("비"))
+    return "현재 비가 내리고 있어 외출 시 우산이 필수입니다. ☕";
+  if (statusStr.includes("눈"))
+    return "눈이 내려 길이 미끄러울 수 있으니 이동 시 주의하세요. ☃️";
+  if (tempNum >= 28)
+    return `현재 기온이 ${tempNum}°C로 다소 무더운 날씨입니다.`;
+  if (tempNum <= 5) return `현재 기온이 ${tempNum}°C로 날씨가 많이 춥습니다.`;
+  return "야외 활동을 즐기기에 매우 쾌적한 날씨입니다! 🗺️";
 };
 
-// 🌐 실제 OpenWeatherMap API 호출 검색 기능
 const searchWeather = async () => {
   const cityInput = inputCity.value.trim();
   if (!cityInput) return;
 
   isWeatherLoading.value = true;
   weatherResult.value = null;
-
   const targetCity = convertToEnglishCity(cityInput);
 
   try {
-    // ⚠️ 기상청 주소가 아닌 OpenWeatherMap 주소로 API fetch를 완전히 전환했습니다.
     const url = `${WEATHER_BASE_URL}?q=${targetCity.eng}&appid=${WEATHER_API_KEY}&units=metric&lang=kr`;
-
     const response = await fetch(url);
 
-    // 401 권한 없음 에러 예외 처리
     if (response.status === 401) {
       weatherResult.value = {
         city: "인증 에러 (401)",
         temp: "--°C",
         status: "키 확인 필요 🔑",
-        comment:
-          ".env 파일의 VITE_OPENWEATHER_API_KEY 값이 정확한지 확인하시거나, 방금 발급받은 키라면 활성화까지 조금만 기다려 주세요.",
+        comment: "API 키 활성화 대기 중이거나 키 입력을 확인해 주세요.",
       };
       return;
     }
 
     if (response.status === 404) {
       weatherResult.value = {
-        city: `'${cityInput}'`,
+        city: cityInput,
         temp: "--°C",
         status: "검색 실패 🔍",
-        comment:
-          "도시 이름을 확인 후 다시 입력해 주세요. (예: 서울, 경기, 부산, 제주 등)",
+        comment: "도시 이름을 다시 확인해 주세요.",
       };
       return;
     }
 
-    if (!response.ok) throw new Error("날씨 API 연동 실패");
+    if (!response.ok) throw new Error("API 오류");
 
     const data = await response.json();
-
     const currentTemp = Math.round(data.main.temp);
     const currentStatus = getWeatherStatus(data.weather[0]);
     const dynamicComment = generateWeatherComment(currentStatus, currentTemp);
@@ -240,13 +208,12 @@ const searchWeather = async () => {
       comment: dynamicComment,
     };
   } catch (error) {
-    console.error("실시간 날씨 로드 오류:", error);
+    console.error(error);
     weatherResult.value = {
-      city: "통신 오류",
+      city: "오류",
       temp: "--°C",
-      status: "연결 불안정 ⚠️",
-      comment:
-        "날씨 서버와의 연결이 원활하지 않습니다. 잠시 후 다시 시도해 주세요.",
+      status: "연결 실패 ⚠️",
+      comment: "네트워크 연결 상태를 확인해 주세요.",
     };
   } finally {
     isWeatherLoading.value = false;
@@ -257,14 +224,12 @@ const searchWeather = async () => {
 <template>
   <div class="app-layout">
     <CommonHeader />
-
     <router-view />
 
     <button
       class="weather-floating-btn"
       @click="toggleWeather"
       :class="{ active: isWeatherOpen }"
-      aria-label="날씨 조회 열기"
     >
       <span v-if="!isWeatherOpen">🌤️</span>
       <span v-else>✕</span>
@@ -274,7 +239,6 @@ const searchWeather = async () => {
       class="chatbot-floating-btn"
       @click="toggleChat"
       :class="{ active: isChatOpen }"
-      aria-label="챗봇 열기"
     >
       <span v-if="!isChatOpen">💬</span>
       <span v-else>✕</span>
@@ -286,17 +250,12 @@ const searchWeather = async () => {
           <span class="weather-icon-mini">📍</span>
           <div>
             <h3>로컬 실시간 날씨</h3>
-            <span class="sub-status">시 / 도 단위 정밀 기상 정보</span>
+            <span class="sub-status">정밀 기상 정보</span>
           </div>
         </div>
       </div>
 
       <div class="weather-body">
-        <p class="weather-guide-txt">
-          조회하고자 하는 <strong>'시' 또는 '도'</strong>를 입력하시면 실시간
-          날씨와 가이드 코멘트를 알려드립니다.
-        </p>
-
         <div class="weather-input-row">
           <input
             v-model="inputCity"
@@ -316,9 +275,8 @@ const searchWeather = async () => {
         <div class="weather-result-display">
           <div v-if="isWeatherLoading" class="weather-inside-loading">
             <span class="mini-spinner"></span>
-            <p>실시간 데이터를 분석하고 있습니다...</p>
+            <p>데이터를 분석하고 있습니다...</p>
           </div>
-
           <div v-else-if="weatherResult" class="weather-card-animate">
             <div class="main-weather-info">
               <span class="res-city">{{ weatherResult.city }}</span>
@@ -331,10 +289,9 @@ const searchWeather = async () => {
               <p>💡 {{ weatherResult.comment }}</p>
             </div>
           </div>
-
           <div v-else class="weather-empty-state">
             <span>🗺️</span>
-            <p>궁금한 지역을 위에 입력해 주세요.</p>
+            <p>궁금한 지역을 입력해 주세요.</p>
           </div>
         </div>
       </div>
@@ -346,7 +303,7 @@ const searchWeather = async () => {
           <span class="status-dot"></span>
           <div>
             <h3>GlassLESS AI 가이드</h3>
-            <span class="sub-status">지역 맞춤 정밀 검색 모드</span>
+            <span class="sub-status">맞춤 검색 모드</span>
           </div>
         </div>
         <button class="btn-close-mobile" @click="isChatOpen = false">
@@ -362,7 +319,6 @@ const searchWeather = async () => {
         >
           <div class="chat-bubble">
             <p class="bubble-text">{{ msg.text }}</p>
-
             <div
               v-if="msg.references && msg.references.length > 0"
               class="reference-container"
@@ -382,7 +338,6 @@ const searchWeather = async () => {
             </div>
           </div>
         </div>
-
         <div v-if="isLoading" class="chat-bubble-wrapper bot">
           <div class="chat-bubble loading-bubble">
             <span class="dot"></span>
@@ -396,7 +351,7 @@ const searchWeather = async () => {
         <input
           v-model="chatMessage"
           type="text"
-          placeholder="지역명과 함께 질문해 주세요 (예: 부산 해변)"
+          placeholder="지역명과 함께 질문해 주세요"
           @keyup.enter="sendChat"
           :disabled="isLoading"
         />
@@ -411,12 +366,9 @@ const searchWeather = async () => {
 <style>
 @import "./assets/main.css";
 
-/* ===================================================
-   ☀️ 날씨 플로팅 버튼 및 모달 스타일링
-   =================================================== */
 .weather-floating-btn {
   position: fixed;
-  bottom: 104px; /* 챗봇 버튼 바로 위에 안착 */
+  bottom: 104px;
   right: 32px;
   width: 60px;
   height: 60px;
@@ -435,12 +387,10 @@ const searchWeather = async () => {
     transform 0.2s,
     background-color 0.2s;
 }
-
 .weather-floating-btn:hover {
   transform: scale(1.05);
   background-color: #20a899;
 }
-
 .weather-floating-btn.active {
   background-color: var(--color-airbnb-dark);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
@@ -461,7 +411,6 @@ const searchWeather = async () => {
   z-index: 999;
   animation: weatherSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
-
 @keyframes weatherSlideUp {
   from {
     transform: translateY(20px);
@@ -478,11 +427,9 @@ const searchWeather = async () => {
   color: white;
   padding: 16px 20px;
 }
-
 .weather-icon-mini {
   font-size: 1.2rem;
 }
-
 .weather-body {
   padding: 20px;
   background-color: #fafafa;
@@ -490,19 +437,10 @@ const searchWeather = async () => {
   flex-direction: column;
   gap: 14px;
 }
-
-.weather-guide-txt {
-  font-size: 0.82rem;
-  color: #666;
-  line-height: 1.4;
-  margin: 0;
-}
-
 .weather-input-row {
   display: flex;
   gap: 8px;
 }
-
 .weather-input-row input {
   flex: 1;
   border: 1px solid var(--color-border);
@@ -512,11 +450,9 @@ const searchWeather = async () => {
   font-size: 0.88rem;
   background-color: white;
 }
-
 .weather-input-row input:focus {
   border-color: #2bcbba;
 }
-
 .weather-input-row button {
   background-color: #2bcbba;
   color: white;
@@ -538,18 +474,15 @@ const searchWeather = async () => {
   flex-direction: column;
   justify-content: center;
 }
-
 .weather-empty-state {
   text-align: center;
   color: #b2bec3;
 }
-
 .weather-empty-state span {
   font-size: 2rem;
   display: block;
   margin-bottom: 6px;
 }
-
 .weather-empty-state p {
   font-size: 0.82rem;
   margin: 0;
@@ -558,7 +491,6 @@ const searchWeather = async () => {
 .weather-card-animate {
   animation: fadeIn 0.3s ease-in-out;
 }
-
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -578,31 +510,26 @@ const searchWeather = async () => {
   padding-bottom: 12px;
   margin-bottom: 12px;
 }
-
 .res-city {
   font-size: 0.82rem;
   font-weight: 700;
   color: #7f8c8d;
 }
-
 .temp-status-block {
   display: flex;
   align-items: baseline;
   gap: 10px;
 }
-
 .res-temp {
   font-size: 1.8rem;
   font-weight: 800;
   color: var(--color-airbnb-dark);
 }
-
 .res-status {
   font-size: 1rem;
   font-weight: 700;
   color: #2bcbba;
 }
-
 .weather-comment-box {
   background-color: #f5f6fa;
   padding: 10px 12px;
@@ -611,7 +538,6 @@ const searchWeather = async () => {
   color: #485460;
   line-height: 1.4;
 }
-
 .weather-comment-box p {
   margin: 0;
 }
@@ -621,7 +547,6 @@ const searchWeather = async () => {
   color: var(--color-airbnb-gray);
   font-size: 0.82rem;
 }
-
 .mini-spinner {
   width: 20px;
   height: 20px;
@@ -632,7 +557,6 @@ const searchWeather = async () => {
   animation: mini-spin 0.6s linear infinite;
   margin-bottom: 6px;
 }
-
 @keyframes mini-spin {
   0% {
     transform: rotate(0deg);
@@ -642,9 +566,6 @@ const searchWeather = async () => {
   }
 }
 
-/* ===================================================
-   💬 기존 챗봇 기본 배치 CSS 구조 유지
-   =================================================== */
 .chatbot-floating-btn {
   position: fixed;
   bottom: 32px;
@@ -666,7 +587,6 @@ const searchWeather = async () => {
     transform 0.2s,
     background-color 0.2s;
 }
-
 .chatbot-floating-btn:hover {
   transform: scale(1.05);
 }
@@ -691,7 +611,6 @@ const searchWeather = async () => {
   z-index: 999;
   animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
-
 .chatbot-header {
   background-color: var(--color-airbnb-dark);
   color: white;
@@ -700,7 +619,6 @@ const searchWeather = async () => {
   justify-content: space-between;
   align-items: center;
 }
-
 .header-info {
   display: flex;
   align-items: center;
@@ -713,7 +631,6 @@ const searchWeather = async () => {
   border-radius: 50%;
   box-shadow: 0 0 8px #2ecc71;
 }
-
 .chatbot-header h3 {
   font-size: 0.95rem;
   font-weight: 700;
@@ -837,7 +754,6 @@ const searchWeather = async () => {
 .loading-bubble .dot:nth-child(2) {
   animation-delay: -0.16s;
 }
-
 @keyframes bounce {
   0%,
   80%,
