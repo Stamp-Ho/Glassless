@@ -26,5 +26,6 @@ class ChatResponse(BaseModel):
     answer: str
     references: list[LocationRef]
     extracted_region: str | None = None
-    extracted_category: str | None = None
+    extracted_category: list[str] | None = None
+    extracted_excluded: list[str] | None = None
     extraction_source: str | None = None
