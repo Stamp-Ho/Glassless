@@ -5,7 +5,7 @@ import { useRouter } from 'vue-router'; // 🔥 라우터 추가
 const KAKAO_APP_KEY = 'b7b4f01e9203d5f62b2fb487cb0fdab5';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://glassless-be.onrender.com';
 const router = useRouter(); // 🔥 인스턴스 생성
-const SEARCH_RADIUS_KM = 10;
+const SEARCH_RADIUS_KM = 5;
 
 // 상태 관리
 const status = ref('데이터를 불러오는 중입니다...');

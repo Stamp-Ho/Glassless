@@ -47,7 +47,20 @@ const buildPostsUrl = () => {
   if (route.query.region) params.set('region', route.query.region);
   if (route.query.category) params.set('category', route.query.category);
   if (route.query.location_id) params.set('location_id', route.query.location_id);
-  return `${API_BASE_URL}/api/posts?${params.toString()}`;
+  const url = `${API_BASE_URL}/api/posts?${params.toString()}`;
+  console.debug('Fetching posts URL:', url);
+  return url;
+};
+
+// 유틸: 카카오맵 링크 생성 (템플릿에서 호출됨 — 반드시 정의 필요)
+const buildKakaoMapLink = (location) => {
+  if (!location) return '#';
+  const lat = location.mapy || location.lat || location.y || null;
+  const lng = location.mapx || location.lng || location.x || null;
+  const title = location.name || location.title || '';
+  if (lat == null || lng == null) return '#';
+  // format: https://map.kakao.com/link/map/{title},{lat},{lng}
+  return `https://map.kakao.com/link/map/${encodeURIComponent(title)},${lat},${lng}`;
 };
 
 const fetchPosts = async () => {
