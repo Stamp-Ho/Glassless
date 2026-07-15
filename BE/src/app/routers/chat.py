@@ -35,6 +35,28 @@ _REGION_ALIASES: dict[str, tuple[str, ...]] = {
 }
 
 
+# simple category aliases mapping: map many user words to canonical category
+_CATEGORY_ALIASES: dict[str, tuple[str, ...]] = {
+    "관광지": ("관광지", "관광", "명소", "볼거리"),
+    "레포츠": ("레포츠", "스포츠", "액티비티", "레저"),
+    "여행코스": ("여행코스", "코스", "코스추천"),
+    "문화시설": ("문화시설", "박물관", "미술관", "전시"),
+    "쇼핑": ("쇼핑", "몰", "시장"),
+    "숙박": ("숙박", "호텔", "게스트하우스", "민박"),
+    "음식점": ("음식점", "맛집", "식당", "카페"),
+    "축제공연행사": ("축제", "공연", "행사", "페스티벌"),
+}
+
+
+def _infer_category(query: str) -> str | None:
+    normalized = re.sub(r"\s+", " ", query).strip().lower()
+    for canonical, aliases in _CATEGORY_ALIASES.items():
+        for alias in aliases:
+            if alias in normalized:
+                return canonical
+    return None
+
+
 def _extract_keywords(query: str) -> list[str]:
     normalized = re.sub(r"\s+", " ", query).strip()
     tokens = [token for token in normalized.split(" ") if len(token) >= 2]
@@ -252,7 +274,21 @@ async def chat(payload: ChatRequest, db: AsyncSession = Depends(get_db)) -> Chat
         )
 
     # 1) Ask OpenAI to extract region and category from the user's text
-    region, category = await _extract_region_category_via_openai(query_text)
+    orig_region, orig_category = await _extract_region_category_via_openai(query_text)
+
+    # 2-step extraction: if OpenAI couldn't extract, fall back to local heuristics
+    region = orig_region
+    category = orig_category
+    extraction_source = "openai" if (orig_region or orig_category) else None
+
+    if not region:
+        region = _infer_region(query_text)
+        if region:
+            extraction_source = (extraction_source + "+heuristic") if extraction_source else "heuristic"
+    if not category:
+        category = _infer_category(query_text)
+        if category:
+            extraction_source = (extraction_source + "+heuristic") if extraction_source else "heuristic"
 
     # 2) Query DB for top-rated location using extracted region/category (try combinations)
     base_stmt = (
