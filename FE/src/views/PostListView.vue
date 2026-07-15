@@ -1,9 +1,10 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 
-const route = useRoute();
 const router = useRouter();
+const route = useRoute(); // 쿼리 스트링 감지를 위해 추가
+
 const posts = ref([]);
 const isLoading = ref(false);
 const isSubmitting = ref(false);
@@ -40,98 +41,12 @@ const locationSearchKeyword = ref('');
 const loadedLocations = ref([]);
 const isLocationLoading = ref(false);
 
-const normalizeLocationId = (value) => {
-  const text = String(value ?? '').trim();
-  if (!/^\d+$/.test(text)) return '';
-  return Number(text) > 0 ? text : '';
-};
-
-const fetchLocationById = async (locationId) => {
-  if (!locationId) return null;
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/locations/${locationId}`);
-    if (!response.ok) return null;
-    return await response.json();
-  } catch (error) {
-    console.error(error);
-    return null;
-  }
-};
-
-const buildKakaoMapLink = (location) => {
-  if (!location) return 'https://map.kakao.com/';
-
-  const address = String(location.address || '').trim();
-  const name = String(location.name || '').trim();
-
-  // 주소 검색을 우선 사용해 실제 도로명/지번 위치로 이동한다.
-  if (address) {
-    const query = [address, name].filter(Boolean).join(' ');
-    return `https://map.kakao.com/?q=${encodeURIComponent(query)}`;
-  }
-
-  const mapx = Number(location.mapx);
-  const mapy = Number(location.mapy);
-  if (Number.isFinite(mapx) && Number.isFinite(mapy)) {
-    return `https://map.kakao.com/link/map/${encodeURIComponent(name || '명소')},${mapy},${mapx}`;
-  }
-
-  if (name) {
-    return `https://map.kakao.com/?q=${encodeURIComponent(name)}`;
-  }
-
-  return 'https://map.kakao.com/';
-};
-
-const buildLocationPostsRoute = (location) => {
-  const locationId = String(location?.id ?? '').trim();
-  if (!/^\d+$/.test(locationId)) {
-    return { path: '/posts' };
-  }
-  return { path: '/posts', query: { location_id: locationId } };
-};
-
-const syncLocationFilterFromRoute = async () => {
-  const routeLocationId = normalizeLocationId(route.query.location_id);
-
-  if (!routeLocationId) {
-    filterLocationId.value = '';
-    selectedFilterLocation.value = null;
-    return;
-  }
-
-  if (filterLocationId.value !== routeLocationId) {
-    filterLocationId.value = routeLocationId;
-  }
-
-  if (!selectedFilterLocation.value || String(selectedFilterLocation.value.id) !== routeLocationId) {
-    selectedFilterLocation.value = await fetchLocationById(Number(routeLocationId));
-  }
-};
-
-const syncRouteWithLocationFilter = async () => {
-  const currentLocationId = normalizeLocationId(route.query.location_id);
-  const nextLocationId = normalizeLocationId(filterLocationId.value);
-  if (currentLocationId === nextLocationId) return;
-
-  const nextQuery = { ...route.query };
-  if (nextLocationId) {
-    nextQuery.location_id = nextLocationId;
-  } else {
-    delete nextQuery.location_id;
-  }
-
-  await router.replace({
-    path: '/posts',
-    query: nextQuery,
-  });
-};
-
+// [변경] 현재 쿼리 파라미터를 기반으로 백엔드 API URL 생성
 const buildPostsUrl = () => {
   const params = new URLSearchParams();
-  if (filterRegion.value) params.set('region', filterRegion.value);
-  if (filterCategory.value) params.set('category', filterCategory.value);
-  if (filterLocationId.value) params.set('location_id', filterLocationId.value);
+  if (route.query.region) params.set('region', route.query.region);
+  if (route.query.category) params.set('category', route.query.category);
+  if (route.query.location_id) params.set('location_id', route.query.location_id);
   return `${API_BASE_URL}/api/posts?${params.toString()}`;
 };
 
@@ -152,12 +67,94 @@ const fetchPosts = async () => {
   }
 };
 
-const filteredLocations = computed(() => {
-  const keyword = locationSearchKeyword.value.trim().toLowerCase();
-  if (!keyword) {
-    return loadedLocations.value;
+// [추가] 쿼리 파라미터에 location_id가 있을 때, 필터 명소 카드 정보를 동적으로 가져오는 함수
+const fetchSelectedLocationInfo = async (id) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/locations/${id}`);
+    if (response.ok) {
+      selectedFilterLocation.value = await response.json();
+    }
+  } catch (error) {
+    console.error('명소 정보를 불러오지 못했습니다:', error);
+  }
+};
+
+// [변경] 필터 상태가 변경되면 URL을 업데이트하는 함수 (메모리 직접 수정 대신 URL 변경)
+const updateFilterRoute = () => {
+  const query = {};
+  if (filterRegion.value) query.region = filterRegion.value;
+  if (filterCategory.value) query.category = filterCategory.value;
+  if (filterLocationId.value) query.location_id = filterLocationId.value;
+
+  router.push({ path: route.path, query });
+};
+
+// [변경] 명소 선택 시, 메모리를 거치지 않고 바로 URL의 쿼리를 변경하도록 수정
+const selectLocation = (location) => {
+  if (locationModalScope.value === 'create') {
+    newRegion.value = location.region;
+    newLocationId.value = String(location.id);
+    newThumbnailUrl.value = location.image_url || '';
+    selectedNewLocation.value = location;
+  } else {
+    filterRegion.value = location.region;
+    filterLocationId.value = String(location.id);
+    selectedFilterLocation.value = location;
+    updateFilterRoute(); // URL 업데이트
+  }
+  closeLocationModal();
+};
+
+// [변경] 선택 해제 시에도 라우터를 거치도록 수정
+const clearSelectedLocation = (scope) => {
+  if (scope === 'create') {
+    newLocationId.value = '';
+    newThumbnailUrl.value = '';
+    selectedNewLocation.value = null;
+    return;
   }
 
+  filterLocationId.value = '';
+  selectedFilterLocation.value = null;
+  updateFilterRoute(); // URL 업데이트
+};
+
+// [추가] 라우터 쿼리 스트링의 변화를 감지하여 상태를 동기화하고 API 호출
+watch(
+  () => route.query,
+  async (newQuery) => {
+    filterRegion.value = newQuery.region || '';
+    filterCategory.value = newQuery.category || '';
+    filterLocationId.value = newQuery.location_id || '';
+
+    // URL에 location_id는 있는데 상세 정보 오브젝트가 매핑되어 있지 않다면 백엔드에서 조회
+    if (newQuery.location_id && (!selectedFilterLocation.value || String(selectedFilterLocation.value.id) !== String(newQuery.location_id))) {
+      await fetchSelectedLocationInfo(newQuery.location_id);
+    } else if (!newQuery.location_id) {
+      selectedFilterLocation.value = null;
+    }
+
+    await fetchPosts();
+  },
+  { deep: true }
+);
+
+// [변경] 온마운트 시점에는 현재 주소창의 쿼리를 먼저 메모리에 대입한 뒤 데이터 페칭 수행
+onMounted(async () => {
+  filterRegion.value = route.query.region || '';
+  filterCategory.value = route.query.category || '';
+  filterLocationId.value = route.query.location_id || '';
+
+  if (filterLocationId.value) {
+    await fetchSelectedLocationInfo(filterLocationId.value);
+  }
+  await fetchPosts();
+});
+
+// 이하 기존 코드와 동일 (기타 비즈니스 로직 유지)
+const filteredLocations = computed(() => {
+  const keyword = locationSearchKeyword.value.trim().toLowerCase();
+  if (!keyword) return loadedLocations.value;
   return loadedLocations.value.filter((location) => {
     const name = String(location?.name || '').toLowerCase();
     const address = String(location?.address || '').toLowerCase();
@@ -173,21 +170,17 @@ const resetModalLocations = () => {
 const openLocationModal = (scope) => {
   locationModalScope.value = scope;
   isLocationModalOpen.value = true;
-
   if (scope === 'create') {
     locationSearchRegion.value = newRegion.value || '';
   } else {
     locationSearchRegion.value = filterRegion.value || '';
   }
-
   locationSearchCategory.value = '';
   resetModalLocations();
 };
 
 const closeLocationModal = () => {
-  if (isLocationLoading.value) {
-    return;
-  }
+  if (isLocationLoading.value) return;
   isLocationModalOpen.value = false;
 };
 
@@ -196,23 +189,17 @@ const loadLocationsByRegionAndCategory = async () => {
     alert('권역과 카테고리를 먼저 선택해주세요.');
     return;
   }
-
   try {
     isLocationLoading.value = true;
     resetModalLocations();
-
     const params = new URLSearchParams({
       region: locationSearchRegion.value,
       category: locationSearchCategory.value,
       limit: '100',
       offset: '0',
     });
-
     const response = await fetch(`${API_BASE_URL}/api/locations?${params.toString()}`);
-    if (!response.ok) {
-      throw new Error('명소 목록을 불러오지 못했습니다.');
-    }
-
+    if (!response.ok) throw new Error('명소 목록을 불러오지 못했습니다.');
     const result = await response.json();
     loadedLocations.value = Array.isArray(result) ? result : [];
   } catch (error) {
@@ -221,37 +208,6 @@ const loadLocationsByRegionAndCategory = async () => {
   } finally {
     isLocationLoading.value = false;
   }
-};
-
-const selectLocation = async (location) => {
-  if (locationModalScope.value === 'create') {
-    newRegion.value = location.region;
-    newLocationId.value = String(location.id);
-    newThumbnailUrl.value = location.image_url || '';
-    selectedNewLocation.value = location;
-  } else {
-    filterRegion.value = location.region;
-    filterLocationId.value = String(location.id);
-    selectedFilterLocation.value = location;
-    await syncRouteWithLocationFilter();
-    await fetchPosts();
-  }
-
-  closeLocationModal();
-};
-
-const clearSelectedLocation = async (scope) => {
-  if (scope === 'create') {
-    newLocationId.value = '';
-    newThumbnailUrl.value = '';
-    selectedNewLocation.value = null;
-    return;
-  }
-
-  filterLocationId.value = '';
-  selectedFilterLocation.value = null;
-  await syncRouteWithLocationFilter();
-  await fetchPosts();
 };
 
 watch(newRegion, (nextRegion) => {
@@ -263,54 +219,35 @@ watch(newRegion, (nextRegion) => {
   }
 });
 
-watch(filterRegion, async (nextRegion) => {
+watch(filterRegion, (nextRegion) => {
   if (!selectedFilterLocation.value) return;
   if (selectedFilterLocation.value.region !== nextRegion) {
     filterLocationId.value = '';
     selectedFilterLocation.value = null;
-    await syncRouteWithLocationFilter();
-    await fetchPosts();
   }
 });
 
-watch(
-  () => route.query.location_id,
-  async () => {
-    await syncLocationFilterFromRoute();
-    await fetchPosts();
-  },
-  { immediate: true }
-);
-
-// 게시글 추가
 const addPost = async () => {
-  if (isSubmitting.value) {
-    return;
-  }
-
+  if (isSubmitting.value) return;
   if (!newTitle.value || !newRegion.value || !newContent.value || !newPassword.value) {
     alert('카테고리, 제목, 지역, 본문, 비밀번호를 모두 입력해주세요!');
     return;
   }
-
   if (!regionOptions.includes(newRegion.value)) {
     alert('지역은 지정된 5개 권역 중에서 선택해야 합니다.');
     return;
   }
-
   const payload = {
     title: newTitle.value.trim(),
     content: newContent.value.trim(),
     password: newPassword.value,
     category: selectedCategory.value,
+    region: newRegion.value
   };
-
-  payload.region = newRegion.value;
   if (newLocationId.value.trim()) {
     payload.location_id = Number(newLocationId.value.trim());
     payload.thumbnail_url = newThumbnailUrl.value || null;
   }
-
   try {
     isSubmitting.value = true;
     const response = await fetch(`${API_BASE_URL}/api/posts`, {
@@ -318,13 +255,10 @@ const addPost = async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({}));
-      const detail = errorBody?.detail || '게시글 등록에 실패했습니다.';
-      throw new Error(String(detail));
+      throw new Error(String(errorBody?.detail || '게시글 등록에 실패했습니다.'));
     }
-
     await fetchPosts();
   } catch (error) {
     console.error(error);
@@ -333,8 +267,6 @@ const addPost = async () => {
   } finally {
     isSubmitting.value = false;
   }
-
-  // 입력창 초기화 및 폼 닫기
   newTitle.value = '';
   newRegion.value = '';
   newContent.value = '';
@@ -347,11 +279,7 @@ const addPost = async () => {
 };
 
 const goToDetail = (id) => {
-  const locationId = normalizeLocationId(filterLocationId.value);
-  router.push({
-    path: `/posts/${id}`,
-    query: locationId ? { location_id: locationId } : {},
-  });
+  router.push(`/post/${id}`);
 };
 </script>
 
