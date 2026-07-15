@@ -6,7 +6,7 @@ class CommentCreate(BaseModel):
     nickname: str = Field(min_length=1, max_length=100)
     password: str = Field(min_length=1, max_length=100)
     content: str = Field(min_length=1, max_length=2000)
-    post_id: int
+
 
 
 class CommentUpdate(BaseModel):
