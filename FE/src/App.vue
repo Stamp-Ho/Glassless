@@ -1,7 +1,10 @@
 <script setup>
-import { ref, nextTick } from "vue";
+import { ref, nextTick, computed } from "vue";
 import CommonHeader from "./components/CommonHeader.vue";
 
+// =========================================================================
+// [1] 💬 챗봇(Chatbot) 관련 스크립트 영역
+// =========================================================================
 const isChatOpen = ref(false);
 const chatMessage = ref("");
 const isLoading = ref(false);
@@ -46,8 +49,8 @@ const sendChat = async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         query: userText,
-        region: "string",
-        category: "string",
+        region: detectedRegion,
+        category: "관광",
       }),
     });
 
@@ -80,74 +83,133 @@ const sendChat = async () => {
 };
 
 const extractRegion = (text) => {
-  const regions = [
-    "서울",
-    "부산",
-    "제주",
-    "인천",
-    "대구",
-    "대전",
-    "광주",
-    "울산",
-    "수영구",
-    "해운대",
-    "애월",
-  ];
+  const regions = ["서울", "부산", "수영구", "해운대"];
   for (const reg of regions) {
     if (text.includes(reg)) return reg;
   }
   return "";
 };
 
+// =========================================================================
+// [2] ☀️ 날씨(Weather) 관련 스크립트 영역
+// =========================================================================
 const isWeatherOpen = ref(false);
-const inputCity = ref("");
 const isWeatherLoading = ref(false);
 const weatherResult = ref(null);
 
+// 날씨 모달 내부 결과창 테마 제어 ('default', 'clear', 'clouds', 'rain', 'snow', 'mist')
+const activeTheme = ref("default");
+
 const WEATHER_API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY;
 const WEATHER_BASE_URL = "https://api.openweathermap.org/data/2.5/weather";
+
+const selectedCity = ref("");
+const selectedDistrict = ref("");
+
+const regionsData = {
+  seoul: {
+    name: "서울특별시",
+    districts: [
+      { eng: "Gangnam-gu", kor: "강남구" },
+      { eng: "Gangdong-gu", kor: "강동구" },
+      { eng: "Gangbuk-gu", kor: "강북구" },
+      { eng: "Gangseo-gu", kor: "강서구" },
+      { eng: "Gwanak-gu", kor: "관악구" },
+      { eng: "Gwangjin-gu", kor: "광진구" },
+      { eng: "Guro-gu", kor: "구로구" },
+      { eng: "Geumcheon-gu", kor: "금천구" },
+      { eng: "Nowon-gu", kor: "노원구" },
+      { eng: "Dobong-gu", kor: "도봉구" },
+      { eng: "Dongdaemun-gu", kor: "동대문구" },
+      { eng: "Dongjak-gu", kor: "동작구" },
+      { eng: "Mapo-gu", kor: "마포구" },
+      { eng: "Seodaemun-gu", kor: "서대문구" },
+      { eng: "Seocho-gu", kor: "서초구" },
+      { eng: "Seongdong-gu", kor: "성동구" },
+      { eng: "Seongbuk-gu", kor: "성북구" },
+      { eng: "Songpa-gu", kor: "송파구" },
+      { eng: "Yangcheon-gu", kor: "양천구" },
+      { eng: "Yeongdeungpo-gu", kor: "영등포구" },
+      { eng: "Yongsan-gu", kor: "용산구" },
+      { eng: "Eunpyeong-gu", kor: "은평구" },
+      { eng: "Jongno-gu", kor: "종로구" },
+      { eng: "Jung-gu,kr", kor: "중구" },
+      { eng: "Jungnang-gu", kor: "중랑구" },
+    ],
+  },
+  busan: {
+    name: "부산광역시",
+    districts: [
+      { eng: "Gangseo-gu,busan", kor: "강서구" },
+      { eng: "Geumjeong-gu", kor: "금정구" },
+      { eng: "Gijang-gun", kor: "기장군" },
+      { eng: "Nam-gu,busan", kor: "남구" },
+      { eng: "Dong-gu,busan", kor: "동구" },
+      { eng: "Dongnae-gu", kor: "동래구" },
+      { eng: "Busanjin-gu", kor: "부산진구" },
+      { eng: "Buk-gu,busan", kor: "북구" },
+      { eng: "Sasang-gu", kor: "사상구" },
+      { eng: "Saha-gu", kor: "사하구" },
+      { eng: "Seo-gu,busan", kor: "서구" },
+      { eng: "Suyeong-gu", kor: "수영구" },
+      { eng: "Yeonje-gu", kor: "연제구" },
+      { eng: "Yeongdo-gu", kor: "영도구" },
+      { eng: "Jung-gu,busan", kor: "중구" },
+      { eng: "Haeundae", kor: "해운대구" },
+    ],
+  },
+};
+
+const availableDistricts = computed(() => {
+  if (!selectedCity.value) return [];
+  return regionsData[selectedCity.value].districts;
+});
+
+const handleCityChange = () => {
+  selectedDistrict.value = "";
+};
 
 const toggleWeather = () => {
   isWeatherOpen.value = !isWeatherOpen.value;
   if (isWeatherOpen.value) {
     isChatOpen.value = false;
     weatherResult.value = null;
-    inputCity.value = "";
+    selectedCity.value = "";
+    selectedDistrict.value = "";
+    activeTheme.value = "default";
   }
 };
 
-const convertToEnglishCity = (cityTxt) => {
-  const city = cityTxt.trim();
-  if (city.includes("서울")) return { eng: "Seoul", kor: "서울특별시" };
-  if (city.includes("부산")) return { eng: "Busan", kor: "부산광역시" };
-  if (city.includes("제주")) return { eng: "Jeju", kor: "제주특별자치도" };
-  if (city.includes("인천")) return { eng: "Incheon", kor: "인천광역시" };
-  if (city.includes("대구")) return { eng: "Daegu", kor: "대구광역시" };
-  if (city.includes("대전")) return { eng: "Daejeon", kor: "대전광역시" };
-  if (city.includes("광주")) return { eng: "Gwangju", kor: "광주광역시" };
-  if (city.includes("울산")) return { eng: "Ulsan", kor: "울산광역시" };
-  if (city.includes("경기") || city.includes("수원"))
-    return { eng: "Suwon", kor: "경기도" };
-  if (city.includes("강원") || city.includes("춘천"))
-    return { eng: "Chuncheon", kor: "강원도" };
-  if (city.includes("충북")) return { eng: "Cheongju", kor: "충청북도" };
-  if (city.includes("충남")) return { eng: "Cheonan", kor: "충청남도" };
-  if (city.includes("전북")) return { eng: "Jeonju", kor: "전라북도" };
-  if (city.includes("전남")) return { eng: "Yeosu", kor: "전라남도" };
-  if (city.includes("경북")) return { eng: "Pohang", kor: "경상북도" };
-  return { eng: city, kor: city };
-};
-
-const getWeatherStatus = (statusInfo) => {
+// OpenWeatherMap 상태에 맞추어 모달 내부 테마 변수 결정
+const processWeatherTheme = (statusInfo) => {
   const main = statusInfo.main.toLowerCase();
-  if (main.includes("clear")) return "맑음 ☀️";
-  if (main.includes("cloud")) return "구름 조금 ☁️";
-  if (main.includes("rain")) return "비 🌧️";
-  if (main.includes("drizzle")) return "이슬비 🌦️";
-  if (main.includes("thunderstorm")) return "천둥 ⚡";
-  if (main.includes("snow")) return "눈 ❄️";
-  if (main.includes("mist") || main.includes("fog") || main.includes("haze"))
+
+  if (main.includes("clear")) {
+    activeTheme.value = "clear";
+    return "맑음 ☀️";
+  }
+  if (main.includes("cloud")) {
+    activeTheme.value = "clouds";
+    return "구름 조금 ☁️";
+  }
+  if (
+    main.includes("rain") ||
+    main.includes("drizzle") ||
+    main.includes("thunderstorm")
+  ) {
+    activeTheme.value = "rain";
+    return "비 🌧️";
+  }
+  if (main.includes("snow")) {
+    activeTheme.value = "snow";
+    return "눈 ❄️";
+  }
+  if (main.includes("mist") || main.includes("fog") || main.includes("haze")) {
+    activeTheme.value = "mist";
     return "안개 🌫️";
+  }
+
+  activeTheme.value = "default";
   return "맑음/흐림 🌤️";
 };
 
@@ -155,42 +217,46 @@ const generateWeatherComment = (statusStr, tempNum) => {
   if (statusStr.includes("비"))
     return "현재 비가 내리고 있어 외출 시 우산이 필수입니다. ☕";
   if (statusStr.includes("눈"))
-    return "눈이 내려 길이 미끄러울 수 있으니 이동 시 주의하세요. ☃️";
+    return "눈이 내려 길이 미끄러울 수 있으니 안전에 주의하세요. ☃️";
   if (tempNum >= 28)
-    return `현재 기온이 ${tempNum}°C로 다소 무더운 날씨입니다.`;
-  if (tempNum <= 5) return `현재 기온이 ${tempNum}°C로 날씨가 많이 춥습니다.`;
-  return "야외 활동을 즐기기에 매우 쾌적한 날씨입니다! 🗺️";
+    return `현재 기온이 ${tempNum}°C로 다소 무덥습니다. 시원한 실내 코스를 추천합니다.`;
+  if (tempNum <= 5)
+    return `현재 기온이 ${tempNum}°C로 꽤 춥습니다. 실내 가이드 위주로 관람해 보세요.`;
+  return "야외 활동을 즐기기에 매우 쾌적하고 좋은 날씨입니다! 🗺️";
 };
 
 const searchWeather = async () => {
-  const cityInput = inputCity.value.trim();
-  if (!cityInput) return;
+  if (!selectedCity.value || !selectedDistrict.value) return;
 
   isWeatherLoading.value = true;
   weatherResult.value = null;
-  const targetCity = convertToEnglishCity(cityInput);
+
+  const currentCityData = regionsData[selectedCity.value];
+  const targetDistrict = currentCityData.districts.find(
+    (d) => d.eng === selectedDistrict.value,
+  );
 
   try {
-    const url = `${WEATHER_BASE_URL}?q=${targetCity.eng}&appid=${WEATHER_API_KEY}&units=metric&lang=kr`;
-    const response = await fetch(url);
+    let url = `${WEATHER_BASE_URL}?q=${targetDistrict.eng}&appid=${WEATHER_API_KEY}&units=metric&lang=kr`;
+    let response = await fetch(url);
+    let isFallback = false;
+
+    if (response.status === 404) {
+      const fallbackQuery = selectedCity.value === "seoul" ? "Seoul" : "Busan";
+      url = `${WEATHER_BASE_URL}?q=${fallbackQuery}&appid=${WEATHER_API_KEY}&units=metric&lang=kr`;
+      response = await fetch(url);
+      isFallback = true;
+    }
 
     if (response.status === 401) {
       weatherResult.value = {
         city: "인증 에러 (401)",
         temp: "--°C",
         status: "키 확인 필요 🔑",
-        comment: "API 키 활성화 대기 중이거나 키 입력을 확인해 주세요.",
+        comment: "OpenWeather API 키값을 확인해 주세요.",
+        isFallback: false,
       };
-      return;
-    }
-
-    if (response.status === 404) {
-      weatherResult.value = {
-        city: cityInput,
-        temp: "--°C",
-        status: "검색 실패 🔍",
-        comment: "도시 이름을 다시 확인해 주세요.",
-      };
+      activeTheme.value = "default";
       return;
     }
 
@@ -198,14 +264,17 @@ const searchWeather = async () => {
 
     const data = await response.json();
     const currentTemp = Math.round(data.main.temp);
-    const currentStatus = getWeatherStatus(data.weather[0]);
+
+    const currentStatus = processWeatherTheme(data.weather[0]);
     const dynamicComment = generateWeatherComment(currentStatus, currentTemp);
 
     weatherResult.value = {
-      city: targetCity.kor,
+      city: `${currentCityData.name} ${targetDistrict.kor}`,
       temp: `${currentTemp}°C`,
       status: currentStatus,
       comment: dynamicComment,
+      isFallback: isFallback,
+      parentCityName: currentCityData.name,
     };
   } catch (error) {
     console.error(error);
@@ -213,8 +282,10 @@ const searchWeather = async () => {
       city: "오류",
       temp: "--°C",
       status: "연결 실패 ⚠️",
-      comment: "네트워크 연결 상태를 확인해 주세요.",
+      comment: "날씨 서버 응답이 원활하지 않습니다.",
+      isFallback: false,
     };
+    activeTheme.value = "default";
   } finally {
     isWeatherLoading.value = false;
   }
@@ -226,6 +297,9 @@ const searchWeather = async () => {
     <CommonHeader />
     <router-view />
 
+    <!-- =================================================================== -->
+    <!-- [A] 플로팅 버튼 영역 -->
+    <!-- =================================================================== -->
     <button
       class="weather-floating-btn"
       @click="toggleWeather"
@@ -244,40 +318,89 @@ const searchWeather = async () => {
       <span v-else>✕</span>
     </button>
 
+    <!-- =================================================================== -->
+    <!-- [B] ☀️ 날씨(Weather) 모달 영역 -->
+    <!-- =================================================================== -->
     <div v-if="isWeatherOpen" class="weather-modal">
       <div class="weather-header">
         <div class="header-info">
           <span class="weather-icon-mini">📍</span>
           <div>
             <h3>로컬 실시간 날씨</h3>
-            <span class="sub-status">정밀 기상 정보</span>
+            <span class="sub-status">서울 / 부산 정밀 날씨 정보</span>
           </div>
         </div>
       </div>
 
       <div class="weather-body">
-        <div class="weather-input-row">
-          <input
-            v-model="inputCity"
-            type="text"
-            placeholder="예: 서울, 부산, 강원, 제주"
-            @keyup.enter="searchWeather"
-            :disabled="isWeatherLoading"
-          />
+        <div class="weather-category-selectors">
+          <select
+            v-model="selectedCity"
+            @change="handleCityChange"
+            class="weather-select"
+          >
+            <option value="" disabled selected>시/도 선택</option>
+            <option value="seoul">서울특별시</option>
+            <option value="busan">부산광역시</option>
+          </select>
+
+          <select
+            v-model="selectedDistrict"
+            :disabled="!selectedCity"
+            class="weather-select"
+          >
+            <option value="" disabled selected>구 선택</option>
+            <option
+              v-for="dist in availableDistricts"
+              :key="dist.eng"
+              :value="dist.eng"
+            >
+              {{ dist.kor }}
+            </option>
+          </select>
+
           <button
             @click="searchWeather"
-            :disabled="isWeatherLoading || !inputCity.trim()"
+            :disabled="isWeatherLoading || !selectedCity || !selectedDistrict"
+            class="btn-weather-search"
           >
             조회
           </button>
         </div>
 
-        <div class="weather-result-display">
+        <!-- 🎨 [날씨 모달 내부 결과 카드 배경 동적 바인딩] -->
+        <div :class="['weather-result-display', `modal-theme-${activeTheme}`]">
+          <!-- 🌌 모달 내부에만 제한되는 날씨 이펙트 파티클 -->
+          <div class="modal-weather-effects">
+            <!-- 1. 🌧️ 모달 내 빗방울 이펙트 -->
+            <div v-if="activeTheme === 'rain'" class="modal-rain-effect">
+              <div class="m-drop" v-for="n in 12" :key="'m-rain-' + n"></div>
+            </div>
+
+            <!-- 2. ☁️ 모달 내 구름 이동 이펙트 -->
+            <div v-if="activeTheme === 'clouds'" class="modal-cloud-effect">
+              <div class="m-moving-cloud m-cloud-1"></div>
+              <div class="m-moving-cloud m-cloud-2"></div>
+            </div>
+
+            <!-- 3. ❄️ 모달 내 눈 이펙트 -->
+            <div v-if="activeTheme === 'snow'" class="modal-snow-effect">
+              <div class="m-flake" v-for="n in 10" :key="'m-snow-' + n"></div>
+            </div>
+
+            <!-- 4. ☀️ 모달 내 햇빛 효과 -->
+            <div v-if="activeTheme === 'clear'" class="modal-sun-flare"></div>
+          </div>
+
           <div v-if="isWeatherLoading" class="weather-inside-loading">
             <span class="mini-spinner"></span>
-            <p>데이터를 분석하고 있습니다...</p>
+            <p>날씨 데이터를 분석하고 있습니다...</p>
           </div>
-          <div v-else-if="weatherResult" class="weather-card-animate">
+
+          <div
+            v-else-if="weatherResult"
+            class="weather-card-content weather-card-animate"
+          >
             <div class="main-weather-info">
               <span class="res-city">{{ weatherResult.city }}</span>
               <div class="temp-status-block">
@@ -285,18 +408,35 @@ const searchWeather = async () => {
                 <span class="res-status">{{ weatherResult.status }}</span>
               </div>
             </div>
+
+            <div
+              v-if="weatherResult.isFallback"
+              class="weather-fallback-banner"
+            >
+              <span class="alert-icon">ℹ️</span>
+              <p>
+                해당 구는 개별 기상 데이터가 없어
+                <strong>{{ weatherResult.parentCityName }} 표준 날씨</strong>로
+                대체 안내해 드립니다.
+              </p>
+            </div>
+
             <div class="weather-comment-box">
               <p>💡 {{ weatherResult.comment }}</p>
             </div>
           </div>
+
           <div v-else class="weather-empty-state">
             <span>🗺️</span>
-            <p>궁금한 지역을 입력해 주세요.</p>
+            <p>상단의 시와 구를 선택해 주세요.</p>
           </div>
         </div>
       </div>
     </div>
 
+    <!-- =================================================================== -->
+    <!-- [C] 💬 챗봇(Chatbot) 모달 영역 -->
+    <!-- =================================================================== -->
     <div v-if="isChatOpen" class="chatbot-modal">
       <div class="chatbot-header">
         <div class="header-info">
@@ -366,6 +506,303 @@ const searchWeather = async () => {
 <style>
 @import "./assets/main.css";
 
+/* 기본 앱 구조 */
+.app-layout {
+  position: relative;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background-color: #ffffff;
+}
+
+/* =========================================================================
+   🖼️ [모달 내부 날씨 카드 (weather-result-display) 테마 스타일 및 이펙트]
+   ========================================================================= */
+.weather-result-display {
+  position: relative; /* 자식 요소 절대 위치 지정을 위해 필수 */
+  min-height: 170px;
+  background-color: white;
+  border: 1px solid #ebebeb;
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden; /* 이펙트가 모달 카드를 벗어나지 않게 제어 */
+  transition:
+    background 0.6s ease,
+    border-color 0.4s ease;
+}
+
+/* 날씨 내용 콘텐츠가 흐릿한 배경 이펙트 위로 선명하게 보이도록 제어 */
+.weather-card-content {
+  position: relative;
+  z-index: 5;
+}
+
+/* 각 날씨 테마별 모달 배경색 */
+.modal-theme-default {
+  background-color: #ffffff;
+}
+.modal-theme-clear {
+  background: linear-gradient(
+    135deg,
+    #e0f2fe 0%,
+    #fffbeb 60%,
+    #fef3c7 100%
+  ) !important;
+  border-color: #fde047;
+}
+.modal-theme-clouds {
+  background: linear-gradient(
+    135deg,
+    #f1f5f9 0%,
+    #e2e8f0 70%,
+    #cbd5e1 100%
+  ) !important;
+  border-color: #cbd5e1;
+}
+.modal-theme-rain {
+  background: linear-gradient(
+    135deg,
+    #475569 0%,
+    #334155 60%,
+    #1e293b 100%
+  ) !important;
+  border-color: #475569;
+}
+/* 비 오는 테마일 경우 카드 글자 가독성 보정 */
+.modal-theme-rain .res-city {
+  color: #cbd5e1 !important;
+}
+.modal-theme-rain .res-temp {
+  color: #ffffff !important;
+}
+.modal-theme-rain .res-status {
+  color: #60a5fa !important;
+}
+.modal-theme-rain .weather-comment-box {
+  background-color: rgba(15, 23, 42, 0.45) !important;
+  color: #f1f5f9 !important;
+}
+
+.modal-theme-snow {
+  background: linear-gradient(
+    135deg,
+    #f3e8ff 0%,
+    #faf5ff 60%,
+    #e9d5ff 100%
+  ) !important;
+  border-color: #d8b4fe;
+}
+.modal-theme-mist {
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%) !important;
+  border-color: #e2e8f0;
+}
+
+/* =========================================================================
+   🌧️ [모달용 날씨 이펙트 애니메이션 구현]
+   ========================================================================= */
+.modal-weather-effects {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* 1. 비 내리는 효과 (Rain) */
+.modal-rain-effect {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.modal-rain-effect .m-drop {
+  position: absolute;
+  background: linear-gradient(transparent, rgba(147, 197, 253, 0.7));
+  width: 1.5px;
+  height: 40px;
+  animation: m-fall 1s infinite linear;
+  opacity: 0.6;
+}
+.modal-rain-effect .m-drop:nth-child(4n + 1) {
+  left: 10%;
+  animation-delay: 0.1s;
+  animation-duration: 1.2s;
+}
+.modal-rain-effect .m-drop:nth-child(4n + 2) {
+  left: 40%;
+  animation-delay: 0.4s;
+  animation-duration: 0.9s;
+}
+.modal-rain-effect .m-drop:nth-child(4n + 3) {
+  left: 70%;
+  animation-delay: 0.2s;
+  animation-duration: 1.1s;
+}
+.modal-rain-effect .m-drop:nth-child(4n + 4) {
+  left: 90%;
+  animation-delay: 0.6s;
+  animation-duration: 0.8s;
+}
+
+@keyframes m-fall {
+  0% {
+    transform: translateY(-50px);
+  }
+  100% {
+    transform: translateY(200px);
+  }
+}
+
+/* 2. 구름 흘러가는 효과 (Clouds) */
+.m-moving-cloud {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 50px;
+  filter: blur(4px);
+}
+.m-cloud-1 {
+  width: 70px;
+  height: 25px;
+  top: 15%;
+  left: -80px;
+  animation: m-drift 18s infinite linear;
+}
+.m-cloud-2 {
+  width: 90px;
+  height: 30px;
+  bottom: 15%;
+  left: -100px;
+  animation: m-drift 24s infinite linear;
+  animation-delay: 4s;
+  opacity: 0.7;
+}
+@keyframes m-drift {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(480px);
+  }
+}
+
+/* 3. 눈 내리는 효과 (Snow) */
+.m-flake {
+  position: absolute;
+  background-color: white;
+  border-radius: 50%;
+  animation: m-snow 5s infinite linear;
+  opacity: 0.85;
+}
+.m-flake:nth-child(3n + 1) {
+  width: 4px;
+  height: 4px;
+  left: 20%;
+  animation-duration: 6s;
+}
+.m-flake:nth-child(3n + 2) {
+  width: 6px;
+  height: 6px;
+  left: 55%;
+  animation-duration: 8s;
+  animation-delay: 1s;
+}
+.m-flake:nth-child(3n + 3) {
+  width: 3px;
+  height: 3px;
+  left: 85%;
+  animation-duration: 4s;
+  animation-delay: 0.5s;
+}
+
+@keyframes m-snow {
+  0% {
+    transform: translateY(-10px) translateX(0);
+  }
+  50% {
+    transform: translateY(90px) translateX(10px);
+  }
+  100% {
+    transform: translateY(180px) translateX(-5px);
+  }
+}
+
+/* 4. 햇살 플레어 효과 (Clear) */
+.modal-sun-flare {
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 140px;
+  height: 140px;
+  background: radial-gradient(
+    circle,
+    rgba(253, 224, 71, 0.4) 0%,
+    rgba(255, 255, 255, 0) 70%
+  );
+  animation: m-pulse 5s infinite alternate ease-in-out;
+}
+@keyframes m-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.2);
+    opacity: 0.8;
+  }
+}
+
+/* =========================================================================
+   [기존 UI 컴포넌트 필수 구조 스타일링]
+   ========================================================================= */
+.weather-category-selectors {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.weather-select {
+  width: 100%;
+  border: 1px solid var(--color-border, #ebebeb);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 0.9rem;
+  outline: none;
+  background-color: white;
+  color: #222222;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23767676' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 14px;
+}
+
+.weather-select:disabled {
+  background-color: #f1f2f6;
+  color: #a4b0be;
+  cursor: not-allowed;
+}
+
+.btn-weather-search {
+  background-color: #2bcbba;
+  color: white;
+  border: none;
+  padding: 12px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.btn-weather-search:disabled {
+  background-color: #ebebeb;
+  color: #767676;
+  cursor: not-allowed;
+}
+
 .weather-floating-btn {
   position: fixed;
   bottom: 104px;
@@ -392,7 +829,7 @@ const searchWeather = async () => {
   background-color: #20a899;
 }
 .weather-floating-btn.active {
-  background-color: var(--color-airbnb-dark);
+  background-color: #222222;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
 
@@ -402,9 +839,9 @@ const searchWeather = async () => {
   right: 32px;
   width: 360px;
   background-color: white;
-  border-radius: var(--radius-airbnb);
+  border-radius: 12px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
-  border: 1px solid var(--color-border);
+  border: 1px solid #ebebeb;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -437,46 +874,11 @@ const searchWeather = async () => {
   flex-direction: column;
   gap: 14px;
 }
-.weather-input-row {
-  display: flex;
-  gap: 8px;
-}
-.weather-input-row input {
-  flex: 1;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 10px 14px;
-  outline: none;
-  font-size: 0.88rem;
-  background-color: white;
-}
-.weather-input-row input:focus {
-  border-color: #2bcbba;
-}
-.weather-input-row button {
-  background-color: #2bcbba;
-  color: white;
-  border: none;
-  padding: 0 18px;
-  border-radius: 8px;
-  font-weight: 700;
-  font-size: 0.88rem;
-  cursor: pointer;
-}
 
-.weather-result-display {
-  min-height: 150px;
-  background-color: white;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
 .weather-empty-state {
   text-align: center;
   color: #b2bec3;
+  z-index: 5;
 }
 .weather-empty-state span {
   font-size: 2rem;
@@ -506,7 +908,7 @@ const searchWeather = async () => {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  border-bottom: 1px dashed var(--color-border);
+  border-bottom: 1px dashed #cbd5e1;
   padding-bottom: 12px;
   margin-bottom: 12px;
 }
@@ -523,15 +925,42 @@ const searchWeather = async () => {
 .res-temp {
   font-size: 1.8rem;
   font-weight: 800;
-  color: var(--color-airbnb-dark);
+  color: #222222;
 }
 .res-status {
   font-size: 1rem;
   font-weight: 700;
   color: #2bcbba;
 }
+
+.weather-fallback-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background-color: rgba(255, 249, 219, 0.85);
+  border: 1px solid #ffe066;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.weather-fallback-banner .alert-icon {
+  font-size: 0.95rem;
+  margin-top: 1px;
+}
+.weather-fallback-banner p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #f08c00;
+  line-height: 1.4;
+  text-align: left;
+}
+.weather-fallback-banner strong {
+  font-weight: 700;
+  text-decoration: underline;
+}
+
 .weather-comment-box {
-  background-color: #f5f6fa;
+  background-color: rgba(245, 246, 250, 0.85);
   padding: 10px 12px;
   border-radius: 6px;
   font-size: 0.82rem;
@@ -544,8 +973,9 @@ const searchWeather = async () => {
 
 .weather-inside-loading {
   text-align: center;
-  color: var(--color-airbnb-gray);
+  color: #767676;
   font-size: 0.82rem;
+  z-index: 5;
 }
 .mini-spinner {
   width: 20px;
@@ -573,7 +1003,7 @@ const searchWeather = async () => {
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  background-color: var(--color-airbnb-red);
+  background-color: #ff385c;
   color: white;
   border: none;
   font-size: 1.6rem;
@@ -591,7 +1021,7 @@ const searchWeather = async () => {
   transform: scale(1.05);
 }
 .chatbot-floating-btn.active {
-  background-color: var(--color-airbnb-dark);
+  background-color: #222222;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
 
@@ -602,17 +1032,28 @@ const searchWeather = async () => {
   width: 390px;
   height: 560px;
   background-color: white;
-  border-radius: var(--radius-airbnb);
+  border-radius: 12px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
-  border: 1px solid var(--color-border);
+  border: 1px solid #ebebeb;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   z-index: 999;
   animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
 .chatbot-header {
-  background-color: var(--color-airbnb-dark);
+  background-color: #222222;
   color: white;
   padding: 18px 20px;
   display: flex;
@@ -634,6 +1075,7 @@ const searchWeather = async () => {
 .chatbot-header h3 {
   font-size: 0.95rem;
   font-weight: 700;
+  margin: 0;
 }
 .sub-status {
   font-size: 0.75rem;
@@ -678,34 +1120,35 @@ const searchWeather = async () => {
 }
 .bot .chat-bubble {
   background-color: white;
-  border: 1px solid var(--color-border);
-  color: var(--color-airbnb-dark);
+  border: 1px solid #ebebeb;
+  color: #222222;
   border-top-left-radius: 2px;
 }
 .user .chat-bubble {
-  background-color: var(--color-airbnb-red);
+  background-color: #ff385c;
   color: white;
   border-top-right-radius: 2px;
 }
 .bubble-text {
   white-space: pre-line;
   word-break: break-all;
+  margin: 0;
 }
 
 .reference-container {
   margin-top: 14px;
   padding-top: 12px;
-  border-top: 1px dashed var(--color-border);
+  border-top: 1px dashed #ebebeb;
 }
 .ref-title {
   font-size: 0.82rem;
   font-weight: 700;
-  color: var(--color-airbnb-dark);
+  color: #222222;
   margin-bottom: 8px;
 }
 .reference-card {
   background-color: #f9f9f9;
-  border: 1px solid var(--color-border);
+  border: 1px solid #ebebeb;
   border-radius: 8px;
   padding: 10px;
   margin-bottom: 8px;
@@ -719,7 +1162,7 @@ const searchWeather = async () => {
 }
 .ref-badge {
   background-color: #ebebeb;
-  color: var(--color-airbnb-dark);
+  color: #222222;
   font-size: 0.7rem;
   font-weight: 700;
   padding: 2px 6px;
@@ -727,11 +1170,11 @@ const searchWeather = async () => {
 }
 .ref-name {
   font-size: 0.85rem;
-  color: var(--color-airbnb-dark);
+  color: #222222;
 }
 .ref-address {
   font-size: 0.75rem;
-  color: var(--color-airbnb-gray);
+  color: #767676;
   margin: 0;
 }
 
@@ -744,7 +1187,7 @@ const searchWeather = async () => {
 .loading-bubble .dot {
   width: 6px;
   height: 6px;
-  background-color: var(--color-airbnb-gray);
+  background-color: #767676;
   border-radius: 50%;
   animation: bounce 1.4s infinite ease-in-out both;
 }
@@ -767,7 +1210,7 @@ const searchWeather = async () => {
 
 .chatbot-footer {
   padding: 16px;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid #ebebeb;
   background-color: white;
   display: flex;
   gap: 8px;
@@ -775,17 +1218,17 @@ const searchWeather = async () => {
 }
 .chatbot-footer input {
   flex: 1;
-  border: 1px solid var(--color-border);
+  border: 1px solid #ebebeb;
   border-radius: 24px;
   padding: 12px 18px;
   outline: none;
   font-size: 0.9rem;
 }
 .chatbot-footer input:focus {
-  border-color: var(--color-airbnb-red);
+  border-color: #ff385c;
 }
 .chatbot-footer button {
-  background-color: var(--color-airbnb-red);
+  background-color: #ff385c;
   color: white;
   border: none;
   padding: 12px 18px;
@@ -796,7 +1239,7 @@ const searchWeather = async () => {
 }
 .chatbot-footer button:disabled {
   background-color: #ebebeb;
-  color: var(--color-airbnb-gray);
+  color: #767676;
   cursor: not-allowed;
 }
 
