@@ -1,6 +1,7 @@
 import re
 
 import httpx
+import json
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -168,8 +169,73 @@ def _build_chat_completion_payload(*, query_text: str, context_text: str) -> dic
     return body
 
 
+async def _extract_region_category_via_openai(query_text: str) -> tuple[str | None, str | None]:
+    """Send `query_text` to OpenAI and request a JSON reply with `region` and `category`.
+
+    Returns (region, category) where each may be None.
+    """
+    system = (
+        "당신은 텍스트에서 한국의 '권역'과 '카테고리'를 추출하는 도우미입니다.\n"
+        "권역은 예: 서울, 부산, 대구, 인천, 광주, 대전, 울산, 세종, 경기, 강원, 충북, 충남, 전북, 전남, 경북, 경남, 제주 중 하나입니다.\n"
+        "카테고리는 예: 관광지, 레포츠, 여행코스, 문화시설, 쇼핑, 숙박, 음식점, 축제공연행사 중 하나입니다.\n"
+        "사용자 질문에서 가능하면 정확히 해당하는 값(한국어)만을 추출하세요.\n"
+        "응답은 반드시 JSON 하나의 객체로만 하세요. 예: {\"region\": \"서울\", \"category\": \"관광지\"}\n"
+        "만약 해당 항목을 찾을 수 없으면 null로 설정하세요. 다른 텍스트나 설명을 덧붙이지 마세요."
+    )
+
+    body = {
+        "model": settings.openai_model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": query_text},
+        ],
+    }
+    if settings.openai_model.startswith("gpt-5"):
+        body["max_completion_tokens"] = settings.openai_max_tokens
+        body["reasoning_effort"] = "minimal"
+    else:
+        body["max_tokens"] = settings.openai_max_tokens
+
+    timeout = httpx.Timeout(settings.openai_timeout_seconds)
+    headers = {
+        "Authorization": f"Bearer {settings.openai_api_key}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=body)
+            resp.raise_for_status()
+            text = resp.text
+    except httpx.TimeoutException:
+        return None, None
+    except httpx.HTTPError:
+        return None, None
+
+    # Extract JSON object from the response text
+    try:
+        # Try to find the first JSON object in the text
+        jstart = text.find("{")
+        jend = text.rfind("}")
+        if jstart != -1 and jend != -1 and jend > jstart:
+            payload = json.loads(text[jstart : jend + 1])
+        else:
+            payload = json.loads(text)
+    except Exception:
+        return None, None
+
+    region = payload.get("region") if isinstance(payload, dict) else None
+    category = payload.get("category") if isinstance(payload, dict) else None
+    if region is not None:
+        region = region.strip() or None
+    if category is not None:
+        category = category.strip() or None
+    return region, category
+
+
 @router.post("", response_model=ChatResponse)
 async def chat(payload: ChatRequest, db: AsyncSession = Depends(get_db)) -> ChatResponse:
+    # We ignore any provided payload.region / payload.category and use OpenAI to extract them from text
     query_text = payload.query.strip()
     if not query_text:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Query is empty")
@@ -185,41 +251,54 @@ async def chat(payload: ChatRequest, db: AsyncSession = Depends(get_db)) -> Chat
             detail="OPENAI_API_KEY is not configured",
         )
 
-    rows = await _fetch_candidates(payload, db)
-    if not rows:
+    # 1) Ask OpenAI to extract region and category from the user's text
+    region, category = await _extract_region_category_via_openai(query_text)
+
+    # 2) Query DB for top-rated location using extracted region/category (try combinations)
+    base_stmt = (
+        select(
+            Location,
+            func.coalesce(func.round(func.avg(LocationRating.score), 1), 0.0).label("rating_avg"),
+            func.coalesce(func.count(LocationRating.id), 0).label("rating_count"),
+        )
+        .outerjoin(LocationRating, LocationRating.location_id == Location.id)
+    )
+
+    candidate_stmts = []
+    if region and category:
+        candidate_stmts.append(base_stmt.where(Location.region == region, Location.category == category))
+    if region:
+        candidate_stmts.append(base_stmt.where(Location.region == region))
+    if category:
+        candidate_stmts.append(base_stmt.where(Location.category == category))
+    # fallback: any location
+    candidate_stmts.append(base_stmt)
+
+    chosen_row = None
+    for stmt in candidate_stmts:
+        stmt = stmt.group_by(Location.id).order_by(
+            func.coalesce(func.avg(LocationRating.score), 0.0).desc(),
+            func.count(LocationRating.id).desc(),
+            Location.id.asc(),
+        )
+        stmt = stmt.limit(1)
+        result = await db.execute(stmt)
+        row = result.first()
+        if row:
+            chosen_row = row
+            break
+
+    if not chosen_row:
         return ChatResponse(answer="제공된 로컬 데이터만으로는 답할 수 없습니다.", references=[])
 
-    context_text = _build_context(rows)
-    body = _build_chat_completion_payload(query_text=query_text, context_text=context_text)
-
-    timeout = httpx.Timeout(settings.openai_timeout_seconds)
-    headers = {
-        "Authorization": f"Bearer {settings.openai_api_key}",
-        "Content-Type": "application/json",
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers=headers,
-                json=body,
-            )
-            response.raise_for_status()
-            data = response.json()
-    except httpx.TimeoutException as exc:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="OpenAI timeout") from exc
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="OpenAI request failed") from exc
-
-    answer = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+    location_obj, rating_avg, rating_count = chosen_row
+    answer = f"추천: {location_obj.name} — {location_obj.category} | 주소: {location_obj.address or '-'} | 별점: {float(rating_avg):.1f} ({int(rating_count)}개)"
     refs = [
         LocationRef(
-            id=row["location"].id,
-            name=row["location"].name,
-            category=row["location"].category,
-            address=row["location"].address,
+            id=location_obj.id,
+            name=location_obj.name,
+            category=location_obj.category,
+            address=location_obj.address,
         )
-        for row in rows
     ]
     return ChatResponse(answer=answer, references=refs)
