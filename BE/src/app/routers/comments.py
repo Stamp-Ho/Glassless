@@ -27,6 +27,11 @@ async def create_comment(post_id: int, payload: CommentCreate, db: AsyncSession 
     await db.refresh(comment)
     return comment
 
+@router.get("/posts/{post_id}", response_model=list[CommentResponse])
+async def get_comments(post_id: int, db: AsyncSession = Depends(get_db)) -> list[Comment]:
+    result = await db.execute(select(Comment).where(Comment.post_id == post_id).order_by(Comment.created_at.desc()))
+    comments = result.scalars().all()
+    return comments
 
 @router.put("/{comment_id}", response_model=CommentResponse)
 async def update_comment(comment_id: int, payload: CommentUpdate, db: AsyncSession = Depends(get_db)) -> Comment:
