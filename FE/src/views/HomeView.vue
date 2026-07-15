@@ -252,17 +252,19 @@ const formatDate = (dateStr) => {
   width: 100%;
 }
 
-/* 🛠️ 데스크톱 풀화면 기준으로 한 줄에 무조건 4개(25%)씩 유연하게 차도록 수정 */
+/* 🛠️ 평소에는 최대 280px 크기를 유지하되, 게시물이 적어도 뚱뚱해지지 않도록 설정 */
 .preview-card {
   /* 🔥 핵심 수정:
-    - calc()를 이용해 전체 100% 영역에서 gap(20px) 3개 분량인 60px을 뺀 뒤, 4등분(25%) 해줍니다.
-    - 이렇게 하면 화면 폭에 맞춰 카드가 유연하게 늘어나면서 정확히 한 줄에 4개가 꽉 차게 들어갑니다.
+    - 기본 너비는 화면이 좁을 때 유연하게 대응하도록 calc 계산식을 유지합니다.
+    - 하지만 'max-width: 280px;'을 걸어두어 게시물이 1~2개뿐이어도 절대 280px보다 커지지 않고 예쁜 비율을 유지합니다.
+    - 'flex-grow: 0;'으로 설정해 남는 공간이 있어도 카드가 억지로 늘어나지 않습니다.
   */
   width: calc((100% - 60px) / 4);
+  max-width: 280px; /* 👈 카드의 최대 크기를 딱 예쁜 280px로 제한! */
 
-  max-width: 100%;
   flex-shrink: 1;
-  flex-grow: 1; /* 남는 빈 공간을 꽉 채우도록 허용 */
+  flex-grow: 0; /* 👈 빈 공간이 생겨도 카드가 멋대로 커지지 않음! */
+
   background-color: white;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-airbnb);
@@ -524,18 +526,27 @@ const formatDate = (dateStr) => {
 .btn-confirm-action:hover {
   filter: brightness(0.9);
 }
-
-/* 🛠️ 모바일 해상도(768px 이하)일 때 패딩 조정 및 이미지 높이 조절 */
-@media (max-width: 768px) {
+/* 1. 태블릿 화면 (1024px 이하) */
+@media (max-width: 1024px) {
   .preview-card {
-    width: calc((100% - 20px) / 2);
+    width: calc((100% - 40px) / 3);
+    max-width: 100%; /* 화면이 작아질 때는 반응형으로 꽉 차게 조절 */
   }
 }
 
-/* 3. 세로 모바일 (480px 이하): 한 줄에 1개씩 꽉 차게 배치 */
+/* 2. 작은 태블릿/가로 모바일 (768px 이하) */
+@media (max-width: 768px) {
+  .preview-card {
+    width: calc((100% - 20px) / 2);
+    max-width: 100%;
+  }
+}
+
+/* 3. 세로 모바일 (480px 이하) */
 @media (max-width: 480px) {
   .preview-card {
     width: 100%;
+    max-width: 100%;
   }
 }
 </style>
