@@ -5,17 +5,17 @@ import { useRouter } from 'vue-router'; // 🔥 라우터 추가
 const KAKAO_APP_KEY = 'b7b4f01e9203d5f62b2fb487cb0fdab5';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 const router = useRouter(); // 🔥 인스턴스 생성
+const SEARCH_RADIUS_KM = 10;
 
 // 상태 관리
 const status = ref('데이터를 불러오는 중입니다...');
 const selectedCategory = ref('tourism');
-const selectedDistrict = ref('강남구');
+const selectedRegion = ref('서울');
 
 const mapContainer = ref(null);
 const map = shallowRef(null);
 
 const places = ref([]);
-const districts = ref([]);
 const resultCount = ref(0);
 const mapMode = ref('fallback');
 const renderVersion = ref(0);
@@ -33,6 +33,16 @@ let isRendering = false;
 let mapInitAttempted = false;
 let pinnedPlaceId = null;
 let fetchRequestToken = 0;
+let centerFetchDebounceTimer = null;
+
+const regionOptions = ['서울', '부산', '광주_전라권', '구미_경북권', '대전_충청권'];
+const REGION_CENTER_MAP = {
+  서울: { lat: 37.5665, lng: 126.9780 },
+  부산: { lat: 35.1796, lng: 129.0756 },
+  광주_전라권: { lat: 35.1595, lng: 126.8526 },
+  구미_경북권: { lat: 36.1195, lng: 128.3446 },
+  대전_충청권: { lat: 36.3504, lng: 127.3845 },
+};
 
 const CATEGORY_KIND_MAP = {
   관광지: 'tourism',
@@ -136,19 +146,34 @@ function getPlacesInBounds(filteredPlacesList) {
   });
 }
 
+function getCurrentMapCenter() {
+  if (!map.value || !window.kakao || !window.kakao.maps) {
+    const fallback = REGION_CENTER_MAP[selectedRegion.value] || REGION_CENTER_MAP['서울'];
+    return { mapx: fallback.lng, mapy: fallback.lat };
+  }
+
+  const center = map.value.getCenter();
+  return {
+    mapx: Number(center.getLng()),
+    mapy: Number(center.getLat()),
+  };
+}
+
+function scheduleCenterBasedFetch(delayMs = 10) {
+  if (centerFetchDebounceTimer) {
+    clearTimeout(centerFetchDebounceTimer);
+  }
+  centerFetchDebounceTimer = window.setTimeout(() => {
+    loadPlacesByFilters();
+  }, delayMs);
+}
+
 function renderPlaces(force = false) {
   const filtered = filteredPlaces.value;
   resultCount.value = filtered.length;
 
   if (isRendering && !force) return;
   if (!map.value) return;
-
-  if (selectedDistrict.value === 'all' && map.value.getLevel() >= 8) {
-    clearMarkers();
-    setStatus('지도를 조금 더 확대해 주세요. (너무 많은 장소가 있습니다)');
-    isRendering = false;
-    return;
-  }
 
   isRendering = true;
   const token = ++renderToken;
@@ -167,7 +192,21 @@ function renderPlaces(force = false) {
   }
 
   try {
-    const visiblePlaces = getPlacesInBounds(filtered).slice(0, MAX_VISIBLE_MARKERS);
+    const currentLevel = map.value.getLevel();
+    
+    // 🔥 [개선] 축소 레벨에 따라 성능 보호를 위해 화면에 그릴 마커 갯수를 유동적으로 조절합니다.
+    // 지도가 아주 많이 축소(level 8 이상)되어도 무조건 최소 15개~30개의 핀은 화면에 유지되도록 합니다.
+    let levelBasedLimit = MAX_VISIBLE_MARKERS;
+    if (currentLevel >= 10) {
+      levelBasedLimit = 2; // 초광역 축소
+    } else if (currentLevel >= 8) {
+      levelBasedLimit = 40; // 광역 축소
+    }
+
+    // 현재 지도 화면(Bounds) 안에 들어오는 장소 필터링
+    const placesInViewport = getPlacesInBounds(filtered);
+    const visiblePlaces = placesInViewport.slice(0, levelBasedLimit);
+    
     const nextVisibleIds = new Set();
     const markerColorMap = {
       tourism: '#2e86de', sports: '#0ea5a4', culture: '#8b5cf6',
@@ -175,9 +214,19 @@ function renderPlaces(force = false) {
     };
 
     const pinnedPlace = filtered.find((place) => place.id === pinnedPlaceId);
-    const placesToRender = pinnedPlace 
-      ? [pinnedPlace, ...visiblePlaces.filter((place) => place.id !== pinnedPlace.id)] 
-      : visiblePlaces;
+    
+    // 만약 화면 안에 들어오는 장소가 하나도 없다면? 
+    // 유저가 길을 잃지 않도록 전체 검색 리스트 중 첫 번째 장소(혹은 고정된 장소) 하나라도 강제로 렌더링 목록에 포함시킵니다.
+    let placesToRender = [];
+    if (visiblePlaces.length === 0 && filtered.length > 0) {
+      // 1순위: 고정(pinned)된 장소, 없으면 전체 리스트의 첫 번째 장소 선택
+      const fallbackPlace = pinnedPlace || filtered[0];
+      placesToRender = [fallbackPlace];
+    } else {
+      placesToRender = pinnedPlace 
+        ? [pinnedPlace, ...visiblePlaces.filter((place) => place.id !== pinnedPlace.id)] 
+        : visiblePlaces;
+    }
 
     placesToRender.forEach((place) => {
       if (token !== renderToken || !map.value) return;
@@ -199,18 +248,12 @@ function renderPlaces(force = false) {
         image: createMarkerImage(markerColorMap[place.kind] || '#2e86de'),
       });
 
-      // 🔥 마커 클릭 이벤트 리스너
+      // 마커 클릭 이벤트 리스너
       window.kakao.maps.event.addListener(marker, 'click', () => {
-        // 1. 모든 핀의 zIndex를 바닥(0)으로 초기화
         markers.forEach(m => m.setZIndex(0));
-        
-        // 2. 현재 클릭한 핀만 최상단으로 끌어올림
         marker.setZIndex(9999);
-
-        // 3. 기존에 열려있던 정보 박스 닫기
         if (infoWindow) infoWindow.close();
         
-        // 4. 정보 박스 내용 구성 (크기 고정 및 텍스트 클릭 시 라우터 연동)
         const contentHtml = `
           <div style="padding:14px; width:220px; box-sizing:border-box; font-family:sans-serif; white-space:normal; word-break:keep-all;">
             <div 
@@ -225,7 +268,6 @@ function renderPlaces(force = false) {
           </div>
         `;
         
-        // 5. 정보 박스 생성 및 띄우기 (정보 박스 자체도 최상단 레이어로 설정)
         infoWindow = new window.kakao.maps.InfoWindow({ 
           content: contentHtml,
           zIndex: 10000 
@@ -249,7 +291,10 @@ function renderPlaces(force = false) {
       }
     }
 
-    if (placesToRender.length) {
+    // 상태 메시지 업데이트
+    if (currentLevel >= 8) {
+      setStatus(`지도가 축소되어 주요 장소 ${placesToRender.length}개만 필터링하여 표시합니다.`);
+    } else if (placesToRender.length) {
       mapMode.value = 'kakao';
       setStatus(`현재 화면 기준 ${placesToRender.length}개 장소를 표시합니다.`);
     } else {
@@ -294,6 +339,7 @@ function initMap() {
       mapBounds = map.value.getBounds();
       if (idleTimeout) clearTimeout(idleTimeout);
       idleTimeout = setTimeout(() => { renderPlaces(false); }, 200);
+      scheduleCenterBasedFetch(200);
     });
 
     renderPlaces(true);
@@ -322,52 +368,36 @@ async function loadPlacesByFilters() {
   const currentToken = ++fetchRequestToken;
   try {
     setStatus('장소 데이터를 조회 중입니다...');
-    const loadedPlaces = [];
     const limit = 100;
-    let offset = 0;
     const categoryParam = CATEGORY_PARAM_MAP[selectedCategory.value] || null;
-    const districtKeyword = selectedDistrict.value === 'all' ? null : selectedDistrict.value;
+    const center = getCurrentMapCenter();
 
-    while (true) {
-      const params = new URLSearchParams();
-      params.set('region', '서울');
-      params.set('limit', String(limit));
-      params.set('offset', String(offset));
-      if (categoryParam) params.set('category', categoryParam);
-      if (districtKeyword) params.set('keyword', districtKeyword);
+    const params = new URLSearchParams();
+    params.set('region', selectedRegion.value);
+    params.set('limit', String(limit));
+    params.set('offset', '0');
+    params.set('mapx', String(center.mapx));
+    params.set('mapy', String(center.mapy));
+    params.set('radius_km', String(SEARCH_RADIUS_KM));
+    if (categoryParam) params.set('category', categoryParam);
 
-      const response = await fetch(`${API_BASE_URL}/api/locations?${params.toString()}`);
-      if (!response.ok) {
-        throw new Error(`locations api error: ${response.status}`);
-      }
-
-      const chunk = await response.json();
-      if (currentToken !== fetchRequestToken) {
-        return;
-      }
-      if (!Array.isArray(chunk) || chunk.length === 0) {
-        break;
-      }
-
-      loadedPlaces.push(...chunk.map((item) => normalizePlace(item)));
-
-      if (chunk.length < limit) {
-        break;
-      }
-      offset += limit;
+    const response = await fetch(`${API_BASE_URL}/api/locations?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error(`locations api error: ${response.status}`);
     }
+
+    const chunk = await response.json();
+    if (currentToken !== fetchRequestToken) {
+      return;
+    }
+
+    const loadedPlaces = Array.isArray(chunk) ? chunk.map((item) => normalizePlace(item)) : [];
 
     if (currentToken !== fetchRequestToken) {
       return;
     }
 
     places.value = loadedPlaces.filter((item) => item.lat !== null && item.lng !== null);
-    const nextDistricts = [...new Set(places.value.map((item) => item.district))].filter(d => d !== '기타').sort();
-    districts.value = nextDistricts;
-
-    if (selectedDistrict.value !== 'all' && !nextDistricts.includes(selectedDistrict.value)) {
-      selectedDistrict.value = 'all';
-    }
 
     renderPlaces();
     setStatus(`총 ${places.value.length}개 장소를 불러왔습니다.`);
@@ -430,8 +460,7 @@ function focusPlace(place) {
 const filteredPlaces = computed(() => {
   return places.value.filter((place) => {
     const categoryMatch = selectedCategory.value === 'all' || place.kind === selectedCategory.value;
-    const districtMatch = selectedDistrict.value === 'all' || place.district === selectedDistrict.value;
-    return categoryMatch && districtMatch;
+    return categoryMatch;
   });
 });
 
@@ -439,38 +468,20 @@ const displayedPlaces = computed(() => {
   return filteredPlaces.value.slice(0, MAX_VISIBLE_LIST_ITEMS);
 });
 
-watch([selectedCategory, selectedDistrict], (newValues, oldValues) => {
-  const [, newDist] = newValues;
-  const [oldCat, oldDist] = oldValues || [null, null];
+watch([selectedCategory, selectedRegion], (newValues, oldValues) => {
+  const [, newRegion] = newValues;
+  const [, oldRegion] = oldValues || [null, null];
 
   renderVersion.value += 1;
-  loadPlacesByFilters();
 
-  if (newDist !== oldDist && map.value) {
-    if (newDist === 'all') {
-      map.value.setCenter(new window.kakao.maps.LatLng(37.5665, 126.9780));
-      map.value.setLevel(7);
-      setTimeout(() => { mapBounds = map.value.getBounds(); renderPlaces(true); }, 50);
-    } else {
-      if (window.kakao && window.kakao.maps && window.kakao.maps.services) {
-        const geocoder = new window.kakao.maps.services.Geocoder();
-        geocoder.addressSearch(`서울특별시 ${newDist}`, (result, status) => {
-          if (status === window.kakao.maps.services.Status.OK) {
-            map.value.setCenter(new window.kakao.maps.LatLng(result[0].y, result[0].x));
-            map.value.setLevel(5); 
-          } else {
-            const districtPlaces = places.value.filter(p => p.district === newDist && p.lat && p.lng);
-            if (districtPlaces.length > 0) {
-              const bounds = new window.kakao.maps.LatLngBounds();
-              districtPlaces.forEach(p => bounds.extend(new window.kakao.maps.LatLng(p.lat, p.lng)));
-              map.value.setBounds(bounds);
-            }
-          }
-          setTimeout(() => { mapBounds = map.value.getBounds(); renderPlaces(true); }, 100);
-        });
-      }
-    }
+  if (newRegion !== oldRegion && map.value) {
+    const nextCenter = REGION_CENTER_MAP[newRegion] || REGION_CENTER_MAP['서울'];
+    map.value.setCenter(new window.kakao.maps.LatLng(nextCenter.lat, nextCenter.lng));
+    map.value.setLevel(7);
+    return;
   }
+
+  scheduleCenterBasedFetch(200);
 });
 
 onMounted(() => {
@@ -485,7 +496,6 @@ onMounted(() => {
   };
 
   window.setTimeout(() => {
-    loadPlacesByFilters();
     loadKakaoMapSdk();
   }, 100);
 });
@@ -495,7 +505,7 @@ onMounted(() => {
   <div class="map-search-layout">
     <aside class="search-sidebar">
       <div class="sidebar-header">
-        <h2>서울 여행지<br>지도 검색</h2>
+        <h2>{{ selectedRegion }} 여행지<br>지도 검색</h2>
         <p>{{ status }}</p>
       </div>
 
@@ -511,10 +521,9 @@ onMounted(() => {
 
         <div class="filter-item">
           <label class="filter-label">권역</label>
-          <select v-model="selectedDistrict" class="filter-select">
-            <option value="all">전체</option>
-            <option v-for="district in districts" :key="district" :value="district">
-              {{ district }}
+          <select v-model="selectedRegion" class="filter-select">
+            <option v-for="region in regionOptions" :key="region" :value="region">
+              {{ region }}
             </option>
           </select>
         </div>
