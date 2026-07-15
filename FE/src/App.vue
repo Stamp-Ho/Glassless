@@ -49,8 +49,8 @@ const sendChat = async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         query: userText,
-        region: detectedRegion,
-        category: "관광",
+        region: "",
+        category: "",
       }),
     });
 
@@ -97,7 +97,6 @@ const isWeatherOpen = ref(false);
 const isWeatherLoading = ref(false);
 const weatherResult = ref(null);
 
-// 날씨 모달 내부 결과창 테마 제어 ('default', 'clear', 'clouds', 'rain', 'snow', 'mist')
 const activeTheme = ref("default");
 
 const WEATHER_API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY;
@@ -180,7 +179,6 @@ const toggleWeather = () => {
   }
 };
 
-// OpenWeatherMap 상태에 맞추어 모달 내부 테마 변수 결정
 const processWeatherTheme = (statusInfo) => {
   const main = statusInfo.main.toLowerCase();
 
@@ -297,9 +295,6 @@ const searchWeather = async () => {
     <CommonHeader />
     <router-view />
 
-    <!-- =================================================================== -->
-    <!-- [A] 플로팅 버튼 영역 -->
-    <!-- =================================================================== -->
     <button
       class="weather-floating-btn"
       @click="toggleWeather"
@@ -318,9 +313,6 @@ const searchWeather = async () => {
       <span v-else>✕</span>
     </button>
 
-    <!-- =================================================================== -->
-    <!-- [B] ☀️ 날씨(Weather) 모달 영역 -->
-    <!-- =================================================================== -->
     <div v-if="isWeatherOpen" class="weather-modal">
       <div class="weather-header">
         <div class="header-info">
@@ -330,6 +322,9 @@ const searchWeather = async () => {
             <span class="sub-status">서울 / 부산 정밀 날씨 정보</span>
           </div>
         </div>
+        <button class="btn-close-modal" @click="isWeatherOpen = false">
+          ✕
+        </button>
       </div>
 
       <div class="weather-body">
@@ -368,27 +363,21 @@ const searchWeather = async () => {
           </button>
         </div>
 
-        <!-- 🎨 [날씨 모달 내부 결과 카드 배경 동적 바인딩] -->
         <div :class="['weather-result-display', `modal-theme-${activeTheme}`]">
-          <!-- 🌌 모달 내부에만 제한되는 날씨 이펙트 파티클 -->
           <div class="modal-weather-effects">
-            <!-- 1. 🌧️ 모달 내 빗방울 이펙트 -->
             <div v-if="activeTheme === 'rain'" class="modal-rain-effect">
               <div class="m-drop" v-for="n in 12" :key="'m-rain-' + n"></div>
             </div>
 
-            <!-- 2. ☁️ 모달 내 구름 이동 이펙트 -->
             <div v-if="activeTheme === 'clouds'" class="modal-cloud-effect">
               <div class="m-moving-cloud m-cloud-1"></div>
               <div class="m-moving-cloud m-cloud-2"></div>
             </div>
 
-            <!-- 3. ❄️ 모달 내 눈 이펙트 -->
             <div v-if="activeTheme === 'snow'" class="modal-snow-effect">
               <div class="m-flake" v-for="n in 10" :key="'m-snow-' + n"></div>
             </div>
 
-            <!-- 4. ☀️ 모달 내 햇빛 효과 -->
             <div v-if="activeTheme === 'clear'" class="modal-sun-flare"></div>
           </div>
 
@@ -434,9 +423,6 @@ const searchWeather = async () => {
       </div>
     </div>
 
-    <!-- =================================================================== -->
-    <!-- [C] 💬 챗봇(Chatbot) 모달 영역 -->
-    <!-- =================================================================== -->
     <div v-if="isChatOpen" class="chatbot-modal">
       <div class="chatbot-header">
         <div class="header-info">
@@ -446,9 +432,7 @@ const searchWeather = async () => {
             <span class="sub-status">맞춤 검색 모드</span>
           </div>
         </div>
-        <button class="btn-close-mobile" @click="isChatOpen = false">
-          닫기
-        </button>
+        <button class="btn-close-modal" @click="isChatOpen = false">✕</button>
       </div>
 
       <div class="chatbot-body" ref="chatBodyRef">
@@ -515,10 +499,10 @@ const searchWeather = async () => {
 }
 
 /* =========================================================================
-   🖼️ [모달 내부 날씨 카드 (weather-result-display) 테마 스타일 및 이펙트]
+   🖼️ [모달 내부 날씨 카드 테마 스타일 및 이펙트]
    ========================================================================= */
 .weather-result-display {
-  position: relative; /* 자식 요소 절대 위치 지정을 위해 필수 */
+  position: relative;
   min-height: 170px;
   background-color: white;
   border: 1px solid #ebebeb;
@@ -527,19 +511,16 @@ const searchWeather = async () => {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  overflow: hidden; /* 이펙트가 모달 카드를 벗어나지 않게 제어 */
+  overflow: hidden;
   transition:
     background 0.6s ease,
     border-color 0.4s ease;
 }
 
-/* 날씨 내용 콘텐츠가 흐릿한 배경 이펙트 위로 선명하게 보이도록 제어 */
 .weather-card-content {
   position: relative;
   z-index: 5;
 }
-
-/* 각 날씨 테마별 모달 배경색 */
 .modal-theme-default {
   background-color: #ffffff;
 }
@@ -570,7 +551,6 @@ const searchWeather = async () => {
   ) !important;
   border-color: #475569;
 }
-/* 비 오는 테마일 경우 카드 글자 가독성 보정 */
 .modal-theme-rain .res-city {
   color: #cbd5e1 !important;
 }
@@ -584,7 +564,6 @@ const searchWeather = async () => {
   background-color: rgba(15, 23, 42, 0.45) !important;
   color: #f1f5f9 !important;
 }
-
 .modal-theme-snow {
   background: linear-gradient(
     135deg,
@@ -600,7 +579,7 @@ const searchWeather = async () => {
 }
 
 /* =========================================================================
-   🌧️ [모달용 날씨 이펙트 애니메이션 구현]
+   🌧️ [모달용 날씨 이펙트 애니메이션]
    ========================================================================= */
 .modal-weather-effects {
   position: absolute;
@@ -611,8 +590,6 @@ const searchWeather = async () => {
   pointer-events: none;
   z-index: 2;
 }
-
-/* 1. 비 내리는 효과 (Rain) */
 .modal-rain-effect {
   position: relative;
   width: 100%;
@@ -656,7 +633,6 @@ const searchWeather = async () => {
   }
 }
 
-/* 2. 구름 흘러가는 효과 (Clouds) */
 .m-moving-cloud {
   position: absolute;
   background: rgba(255, 255, 255, 0.5);
@@ -688,7 +664,6 @@ const searchWeather = async () => {
   }
 }
 
-/* 3. 눈 내리는 효과 (Snow) */
 .m-flake {
   position: absolute;
   background-color: white;
@@ -729,7 +704,6 @@ const searchWeather = async () => {
   }
 }
 
-/* 4. 햇살 플레어 효과 (Clear) */
 .modal-sun-flare {
   position: absolute;
   top: -40px;
@@ -755,14 +729,13 @@ const searchWeather = async () => {
 }
 
 /* =========================================================================
-   [기존 UI 컴포넌트 필수 구조 스타일링]
+   [UI 요소 기본 스타일링]
    ========================================================================= */
 .weather-category-selectors {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
-
 .weather-select {
   width: 100%;
   border: 1px solid var(--color-border, #ebebeb);
@@ -779,13 +752,11 @@ const searchWeather = async () => {
   background-position: right 14px center;
   background-size: 14px;
 }
-
 .weather-select:disabled {
   background-color: #f1f2f6;
   color: #a4b0be;
   cursor: not-allowed;
 }
-
 .btn-weather-search {
   background-color: #2bcbba;
   color: white;
@@ -803,6 +774,7 @@ const searchWeather = async () => {
   cursor: not-allowed;
 }
 
+/* 🌟 [수정] 플로팅 버튼의 기본 z-index 레이어를 1000으로 정의 */
 .weather-floating-btn {
   position: fixed;
   bottom: 104px;
@@ -833,6 +805,36 @@ const searchWeather = async () => {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
 
+.chatbot-floating-btn {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background-color: #ff385c;
+  color: white;
+  border: none;
+  font-size: 1.6rem;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(224, 26, 79, 0.35);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    transform 0.2s,
+    background-color 0.2s;
+}
+.chatbot-floating-btn:hover {
+  transform: scale(1.05);
+}
+.chatbot-floating-btn.active {
+  background-color: #222222;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+/* 🌟 [수정] 데스크톱 모달창 레이어의 z-index를 버튼(1000)보다 높은 2000으로 파격 상향 */
 .weather-modal {
   position: fixed;
   bottom: 176px;
@@ -845,7 +847,7 @@ const searchWeather = async () => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  z-index: 999;
+  z-index: 2000;
   animation: weatherSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 @keyframes weatherSlideUp {
@@ -859,10 +861,41 @@ const searchWeather = async () => {
   }
 }
 
+.chatbot-modal {
+  position: fixed;
+  bottom: 104px;
+  right: 32px;
+  width: 390px;
+  height: 560px;
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+  border: 1px solid #ebebeb;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 2000;
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* 공용 헤더 스타일링 및 닫기 버튼 */
 .weather-header {
   background-color: #2bcbba;
   color: white;
   padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 .weather-icon-mini {
   font-size: 1.2rem;
@@ -874,7 +907,6 @@ const searchWeather = async () => {
   flex-direction: column;
   gap: 14px;
 }
-
 .weather-empty-state {
   text-align: center;
   color: #b2bec3;
@@ -889,7 +921,6 @@ const searchWeather = async () => {
   font-size: 0.82rem;
   margin: 0;
 }
-
 .weather-card-animate {
   animation: fadeIn 0.3s ease-in-out;
 }
@@ -932,7 +963,6 @@ const searchWeather = async () => {
   font-weight: 700;
   color: #2bcbba;
 }
-
 .weather-fallback-banner {
   display: flex;
   align-items: flex-start;
@@ -958,7 +988,6 @@ const searchWeather = async () => {
   font-weight: 700;
   text-decoration: underline;
 }
-
 .weather-comment-box {
   background-color: rgba(245, 246, 250, 0.85);
   padding: 10px 12px;
@@ -970,7 +999,6 @@ const searchWeather = async () => {
 .weather-comment-box p {
   margin: 0;
 }
-
 .weather-inside-loading {
   text-align: center;
   color: #767676;
@@ -996,62 +1024,6 @@ const searchWeather = async () => {
   }
 }
 
-.chatbot-floating-btn {
-  position: fixed;
-  bottom: 32px;
-  right: 32px;
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  background-color: #ff385c;
-  color: white;
-  border: none;
-  font-size: 1.6rem;
-  cursor: pointer;
-  box-shadow: 0 8px 24px rgba(224, 26, 79, 0.35);
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition:
-    transform 0.2s,
-    background-color 0.2s;
-}
-.chatbot-floating-btn:hover {
-  transform: scale(1.05);
-}
-.chatbot-floating-btn.active {
-  background-color: #222222;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-}
-
-.chatbot-modal {
-  position: fixed;
-  bottom: 104px;
-  right: 32px;
-  width: 390px;
-  height: 560px;
-  background-color: white;
-  border-radius: 12px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
-  border: 1px solid #ebebeb;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  z-index: 999;
-  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-@keyframes slideUp {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
 .chatbot-header {
   background-color: #222222;
   color: white;
@@ -1059,11 +1031,6 @@ const searchWeather = async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-.header-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
 }
 .status-dot {
   width: 8px;
@@ -1081,14 +1048,26 @@ const searchWeather = async () => {
   font-size: 0.75rem;
   opacity: 0.7;
 }
-.btn-close-mobile {
-  display: none;
+
+/* 🌟 [수정] 모달창 우측 상단 X(닫기 및 뒤로가기) 버튼 스타일 명확화 */
+.btn-close-modal {
   background: none;
   border: none;
   color: white;
-  font-size: 0.85rem;
+  font-size: 1.2rem;
   cursor: pointer;
   opacity: 0.8;
+  transition:
+    opacity 0.2s,
+    transform 0.2s;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-close-modal:hover {
+  opacity: 1;
+  transform: scale(1.1);
 }
 
 .chatbot-body {
@@ -1134,7 +1113,6 @@ const searchWeather = async () => {
   word-break: break-all;
   margin: 0;
 }
-
 .reference-container {
   margin-top: 14px;
   padding-top: 12px;
@@ -1177,7 +1155,6 @@ const searchWeather = async () => {
   color: #767676;
   margin: 0;
 }
-
 .loading-bubble {
   display: flex;
   align-items: center;
@@ -1207,7 +1184,6 @@ const searchWeather = async () => {
     transform: scale(1);
   }
 }
-
 .chatbot-footer {
   padding: 16px;
   border-top: 1px solid #ebebeb;
@@ -1243,38 +1219,39 @@ const searchWeather = async () => {
   cursor: not-allowed;
 }
 
+/* =========================================================================
+   🛠️ 모바일 화면 반응형 미디어 쿼리 (max-width: 600px) 고도화
+   ========================================================================= */
 @media (max-width: 600px) {
+  .chatbot-floating-btn {
+    bottom: 20px !important;
+    right: 20px !important;
+    width: 54px !important;
+    height: 54px !important;
+    z-index: 1000 !important;
+  }
+
   .weather-floating-btn {
-    bottom: 84px;
-    right: 20px;
-    width: 54px;
-    height: 54px;
+    bottom: 86px !important;
+    right: 20px !important;
+    width: 54px !important;
+    height: 54px !important;
+    z-index: 1000 !important;
   }
-  .weather-modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 100%;
-    height: 100%;
-    border-radius: 0;
-    border: none;
-  }
+
+  /* 모바일 환경 전체화면 확장 */
+  .weather-modal,
   .chatbot-modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 100%;
-    height: 100%;
-    border-radius: 0;
-    border: none;
-    z-index: 2000;
-  }
-  .btn-close-mobile {
-    display: block;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 0 !important;
+    border: none !important;
+    z-index: 2500 !important; /* 플로팅 요소를 완벽하게 기저로 깔아버리는 초고순위 배치 */
   }
 }
 </style>

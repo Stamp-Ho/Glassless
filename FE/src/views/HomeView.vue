@@ -10,7 +10,7 @@ const isModalOpen = ref(false);
 const detailedPost = ref(null);
 const isDetailLoading = ref(false);
 
-// .env 파일에 정의된 전역 환경 변수 가져오기 (https://glassless-be.onrender.com)
+// .env 파일에 정의된 전역 환경 변수 가져오기
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 onMounted(async () => {
@@ -243,33 +243,29 @@ const formatDate = (dateStr) => {
   cursor: pointer;
 }
 
+/* 🛠️ 가로 스크롤을 없애고 자리가 부족하면 다음 줄로 떨어지도록 flex-wrap 처리 */
 .slider-container {
   display: flex;
   gap: 20px;
-  overflow-x: auto;
+  flex-wrap: wrap;
   padding-bottom: 12px;
-  scroll-behavior: smooth;
-  snap-type: x mandatory;
 }
 
+/* 🛠️ 카드는 평소에 너비가 280px로 완전 고정되며, 
+   화면 폭이 280px보다 작아질 때만 깨지지 않고 100% 비율로 축소됨 */
 .preview-card {
-  flex: 0 0 calc(25% - 15px);
-  min-width: 260px;
+  width: 280px;
+  max-width: 100%;
+  flex-shrink: 1; /* 화면이 카드 크기보다 작아지면 수축 허용 */
+  flex-grow: 0; /* 마음대로 늘어나서 깨지지 않도록 고정 */
   background-color: white;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-airbnb);
   overflow: hidden;
   cursor: pointer;
-  snap-align: start;
   transition:
     transform 0.2s,
     box-shadow 0.2s;
-}
-
-@media (max-width: 1100px) {
-  .preview-card {
-    flex: 0 0 280px;
-  }
 }
 
 .preview-card:hover {
@@ -318,7 +314,7 @@ const formatDate = (dateStr) => {
 }
 
 /* ==========================================
-   ✨ 모달창 (Modal) 디자인
+    ✨ 모달창 (Modal) 디자인
    ========================================== */
 .modal-backdrop {
   position: fixed;
@@ -433,7 +429,6 @@ const formatDate = (dateStr) => {
   color: var(--color-airbnb-dark);
 }
 
-/* 모달 바디 */
 .modal-body {
   padding: 28px;
   max-height: 440px;
@@ -444,15 +439,14 @@ const formatDate = (dateStr) => {
   font-size: 1.6rem;
   font-weight: 800;
   color: var(--color-airbnb-dark);
-  margin-bottom: 10px; /* 아래 등록일과 간격 최적화 */
+  margin-bottom: 10px;
   line-height: 1.3;
 }
 
-/* 📅 신규 등록일 스타일링 */
 .modal-post-date {
   font-size: 0.85rem;
   color: var(--color-airbnb-gray);
-  margin-bottom: 24px; /* 본문 이미지와의 간격 확보 */
+  margin-bottom: 24px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -501,7 +495,6 @@ const formatDate = (dateStr) => {
   white-space: pre-wrap;
 }
 
-/* 모달 푸터 */
 .modal-footer {
   padding: 18px 28px;
   border-top: 1px solid var(--color-border);
@@ -525,6 +518,21 @@ const formatDate = (dateStr) => {
 
 .btn-confirm-action:hover {
   filter: brightness(0.9);
+}
+
+/* 🛠️ 모바일 해상도(768px 이하)일 때 패딩 조정 및 이미지 높이 조절 */
+@media (max-width: 768px) {
+  .preview-section {
+    padding: 0 16px;
+    margin: 24px auto 0;
+  }
+  .hero-map-section {
+    height: 240px;
+  }
+  .slider-container {
+    gap: 16px;
+    justify-content: center; /* 스마트폰에서 중앙 정렬을 원할 시 */
+  }
 }
 
 @media (max-width: 600px) {
