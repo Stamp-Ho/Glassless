@@ -65,12 +65,10 @@ const goToPostDetail = (postId) => {
         >
           <div class="card-image-container">
             <img
-              v-if="post.thumbnail_url"
-              :src="post.thumbnail_url"
+              :src="post.thumbnail_url || '/images/og-thumbnail.jpg'"
               :alt="post.title"
               class="card-image"
             />
-            <div v-else class="card-image-placeholder-bg"></div>
 
             <span class="badge">{{ post.region || "지역 정보 없음" }}</span>
           </div>
@@ -210,13 +208,6 @@ const goToPostDetail = (postId) => {
   height: 100%;
   object-fit: cover; /* 이미지가 찌그러지지 않고 꽉 차게 비율 조절 */
   display: block;
-}
-
-/* 이미지가 없을 때 보여줄 배경 */
-.card-image-placeholder-bg {
-  width: 100%;
-  height: 100%;
-  background-color: #e0e0e0; /* 연한 회색으로 채우기 */
 }
 
 /* 2. [수정됨] 미리보기 카드 지역 배지 스타일 */
