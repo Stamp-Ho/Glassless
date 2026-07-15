@@ -34,3 +34,5 @@ async def init_db() -> None:
             )
         if "location_id" not in column_names:
             await conn.exec_driver_sql("ALTER TABLE posts ADD COLUMN location_id INTEGER")
+        if "thumbnail_url" not in column_names:
+            await conn.exec_driver_sql("ALTER TABLE posts ADD COLUMN thumbnail_url VARCHAR(1000)")
