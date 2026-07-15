@@ -37,6 +37,7 @@ async def list_posts(
             location_id=post.location_id,
             thumbnail_url=post.thumbnail_url,
             region=post.region,
+            rating=post.rating_score,
             created_at=post.created_at,
             updated_at=post.updated_at,
         )
@@ -76,6 +77,7 @@ async def create_post(payload: PostCreate, db: AsyncSession = Depends(get_db)) -
         location_id=payload.location_id,
         thumbnail_url=location.image_url if location else None,
         region=location.region if location else (payload.region.strip() if payload.region else None),
+        rating_score=payload.rating if payload.rating is not None else None,
     )
     db.add(post)
     await db.commit()
