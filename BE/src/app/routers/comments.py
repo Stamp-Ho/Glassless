@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.models.comment import Comment
 from app.models.post import Post
-from app.schemas.comment import CommentCreate, CommentResponse, CommentUpdate
+from app.schemas.comment import CommentCreate, CommentDelete, CommentResponse, CommentUpdate
 
 router = APIRouter(prefix="/comments", tags=["comments"])
 
@@ -49,7 +49,7 @@ async def update_comment(comment_id: int, payload: CommentUpdate, db: AsyncSessi
 
 
 @router.delete("/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_comment(comment_id: int, payload: CommentUpdate, db: AsyncSession = Depends(get_db)) -> None:
+async def delete_comment(comment_id: int, payload: CommentDelete, db: AsyncSession = Depends(get_db)) -> None:
     result = await db.execute(select(Comment).where(Comment.id == comment_id))
     comment = result.scalar_one_or_none()
     if not comment:

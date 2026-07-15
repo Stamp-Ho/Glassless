@@ -13,6 +13,9 @@ class CommentUpdate(BaseModel):
     password: str = Field(min_length=1, max_length=100)
     content: str = Field(min_length=1, max_length=2000)
 
+class CommentDelete(BaseModel):
+    password: str = Field(min_length=1, max_length=100)
+
 
 class CommentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
