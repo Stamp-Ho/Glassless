@@ -352,6 +352,12 @@ onMounted(async () => {
         </div>
       </div>
       <h1 v-if="!isEditMode" class="detail-title">{{ post.title }}</h1>
+      <div v-if="!isEditMode && post && post.category === '후기'" class="post-detail-rating">
+        <span class="post-stars">
+          <span v-for="i in 5" :key="i" class="loc-star" :class="{ filled: i <= Math.round(post.rating || 0) }">★</span>
+        </span>
+        <small class="rating-text">{{ post.rating ? Number(post.rating).toFixed(1) : '-' }}</small>
+      </div>
       <input v-else v-model="editTitle" class="detail-title-input" type="text" maxlength="200" />
 
       <div class="detail-info">
@@ -612,6 +618,11 @@ onMounted(async () => {
 .loc-star { color: #dcdcdc; font-size:1rem; }
 .loc-star.filled { color: #FFD54A; }
 .rating-text { color: var(--color-airbnb-gray); font-size:0.85rem; }
+
+.post-detail-rating { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+.post-detail-rating .post-stars { display:flex; gap:6px; }
+.post-detail-rating .loc-star { color:#dcdcdc; }
+.post-detail-rating .loc-star.filled { color:#FFD54A; }
 
 .detail-location-card {
   margin-top: 18px;

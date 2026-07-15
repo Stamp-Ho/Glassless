@@ -87,6 +87,7 @@ function storeSubmittedRating(locationId, score) {
   } catch (e) { /* ignore */ }
 }
 
+
 async function submitRatingForLocation(locationId, score) {
   if (!locationId) return;
   // do NOT block submission client-side based on localStorage — always send to server
@@ -389,16 +390,22 @@ const addPost = async () => {
   }
   try {
     isSubmitting.value = true;
-    // If this is a review ('후기') and user selected a location and set a rating,
-    // submit the rating first; if rating submission fails, abort post creation.
+    // If this is a review ('후기') and user selected a location and provided a rating,
+    // submit the rating first to the locations ratings API. If it fails, abort post creation.
     if (selectedCategory.value === '후기' && newLocationId.value && rating.value > 0) {
       const ok = await submitRatingForLocation(String(newLocationId.value), rating.value);
       if (!ok) {
-        // rating failed; submitRatingForLocation already shows modal/toast.
         throw new Error('별점 등록 실패로 게시글 등록이 취소되었습니다.');
       }
+      // include rating in post payload as well
+      payload.rating = rating.value;
     }
 
+    console.debug('Post payload:', payload);
+    if (selectedCategory.value === '후기' && rating.value > 0 && payload.rating == null) {
+      console.warn('Expected rating to be present in payload but it is missing', { selectedCategory: selectedCategory.value, rating: rating.value });
+      showToast('별점이 포함되지 않았습니다 (디버그).', 'error');
+    }
     const response = await fetch(`${API_BASE_URL}/api/posts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -637,6 +644,12 @@ const goToDetail = (id) => {
           </div>
 
           <div class="card-content">
+            <div v-if="post.category === '후기'" class="post-rating">
+              <span class="post-stars">
+                <span v-for="i in 5" :key="i" class="loc-star" :class="{ filled: i <= Math.round(post.rating || 0) }">★</span>
+              </span>
+              <span class="rating-text">{{ post.rating ? Number(post.rating).toFixed(1) : '-' }}</span>
+            </div>
             <h3 class="card-title">{{ post.title }}</h3>
             <p class="card-desc">{{ post.content.slice(0, 25) }}{{ post.content.length > 25 ? '...' : '' }}</p>
             
@@ -1142,6 +1155,12 @@ const goToDetail = (id) => {
   box-shadow: 0 12px 24px rgba(0,0,0,0.1);
   border-color: #2f2f2f;
 }
+
+.post-rating { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.post-stars { display:flex; gap:4px; }
+.post-stars .loc-star { color:#dcdcdc; font-size:0.95rem; }
+.post-stars .loc-star.filled { color:#FFD54A; }
+.post-card .rating-text { color: var(--color-airbnb-gray); font-size:0.85rem; }
 
 .card-image-field {
   height: 160px;
