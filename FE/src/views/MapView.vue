@@ -322,8 +322,11 @@ function initMap() {
 
   try {
     container.innerHTML = '';
+    // 초기 설정 지역의 중심 좌표 가져오기
+    const initialCenter = REGION_CENTER_MAP[selectedRegion.value] || REGION_CENTER_MAP['서울'];
+    
     const options = {
-      center: new window.kakao.maps.LatLng(37.5665, 126.9780),
+      center: new window.kakao.maps.LatLng(initialCenter.lat, initialCenter.lng),
       level: 7, 
     };
     map.value = new window.kakao.maps.Map(container, options);
@@ -342,9 +345,14 @@ function initMap() {
       scheduleCenterBasedFetch(200);
     });
 
-    renderPlaces(true);
+    // 🌟 [수정] 지도 생성 완료 직후, 첫 장소 목록을 명시적으로 즉시 호출합니다.
+    loadPlacesByFilters();
+    
   } catch (error) {
-    mapMode.value = 'kakao';
+    console.error('지도 초기화 실패:', error);
+    mapMode.value = 'fallback';
+    // 지도 로드 실패 시에도 리스트는 보일 수 있도록 대체 데이터 로드 진행
+    loadPlacesByFilters();
   }
 }
 
@@ -359,7 +367,10 @@ function loadKakaoMapSdk() {
   script.async = true;
   script.onload = () => {
     if (window.kakao && window.kakao.maps) window.kakao.maps.load(() => initMap());
-    else mapMode.value = 'fallback';
+    else {
+      mapMode.value = 'fallback';
+      loadPlacesByFilters(); // SDK 로드 실패 시에도 데이터 로드 시도
+    }
   };
   document.head.appendChild(script);
 }
@@ -368,43 +379,91 @@ async function loadPlacesByFilters() {
   const currentToken = ++fetchRequestToken;
   try {
     setStatus('장소 데이터를 조회 중입니다...');
-    const limit = 100;
-    const categoryParam = CATEGORY_PARAM_MAP[selectedCategory.value] || null;
     const center = getCurrentMapCenter();
+    
+    // API 공통 파라미터 빌더
+    const createParams = (categoryName, limitValue, offset) => {
+      const params = new URLSearchParams();
+      params.set('region', selectedRegion.value);
+      params.set('limit', String(limitValue));
+      params.set('offset', String(offset));
+      params.set('mapx', String(center.mapx));
+      params.set('mapy', String(center.mapy));
+      params.set('radius_km', String(SEARCH_RADIUS_KM));
+      if (categoryName) {
+        params.set('category', categoryName);
+      }
+      return params.toString();
+    };
 
-    const params = new URLSearchParams();
-    params.set('region', selectedRegion.value);
-    params.set('limit', String(limit));
-    params.set('offset', '0');
-    params.set('mapx', String(center.mapx));
-    params.set('mapy', String(center.mapy));
-    params.set('radius_km', String(SEARCH_RADIUS_KM));
-    if (categoryParam) params.set('category', categoryParam);
+    let rawPlaces = [];
 
-    const response = await fetch(`${API_BASE_URL}/api/locations?${params.toString()}`);
-    if (!response.ok) {
-      throw new Error(`locations api error: ${response.status}`);
+    // 🌟 카테고리가 '전체(all)'일 때 병렬 요청 처리 (총 300개 target)
+    if (selectedCategory.value === 'all') {
+      // 대표적으로 고르게 섞여 나오기 좋은 3대 카테고리 선정
+      const targetCategories = ['관광지', '레포츠', '문화시설', '쇼핑', '여행코스', '숙박', '축제공연행사'];
+      
+      // 3개의 요청을 동시에(병렬) 보냅니다. (각 100개씩)
+      const fetchPromises = targetCategories.map(cat => 
+        fetch(`${API_BASE_URL}/api/locations?${createParams(cat, 30)}`)
+          .then(res => {
+            if (!res.ok) throw new Error();
+            return res.json();
+          })
+          .catch(() => []) // 특정 카테고리 에러 시 빈 배열 반환하여 전체 병렬 처리가 깨지지 않도록 방어
+      );
+
+      const results = await Promise.all(fetchPromises);
+      
+      if (currentToken !== fetchRequestToken) return;
+
+      // 병렬 결과를 하나의 배열로 병합
+      rawPlaces = results.flat();
+    } 
+    // 특정 단일 카테고리 선택 시 (기존 로직 유지 - 100개)
+    else {
+      const categoryParam = CATEGORY_PARAM_MAP[selectedCategory.value] || null;
+      
+      // offset 0(1~100번째)과 offset 100(101~200번째) 요청을 동시에 보냅니다.
+      const offsets = [0, 100];
+      const fetchPromises = offsets.map(offset => 
+        fetch(`${API_BASE_URL}/api/locations?${createParams(categoryParam, 100, offset)}`)
+          .then(res => {
+            if (!res.ok) throw new Error();
+            return res.json();
+          })
+          .catch(() => [])
+      );
+
+      const results = await Promise.all(fetchPromises);
+      if (currentToken !== fetchRequestToken) return;
+      console.log(results.flat());
+
+      rawPlaces = results.flat();
     }
 
-    const chunk = await response.json();
-    if (currentToken !== fetchRequestToken) {
-      return;
-    }
+    if (currentToken !== fetchRequestToken) return;
 
-    const loadedPlaces = Array.isArray(chunk) ? chunk.map((item) => normalizePlace(item)) : [];
+    // 데이터 가공 및 중복 제거
+    const normalized = Array.isArray(rawPlaces) 
+      ? rawPlaces.map((item) => normalizePlace(item)) 
+      : [];
 
-    if (currentToken !== fetchRequestToken) {
-      return;
-    }
+    const uniqueMap = new Map();
+    normalized.forEach(item => {
+      if (item.lat !== null && item.lng !== null) {
+        uniqueMap.set(item.id, item); // ID 기준 중복 제거
+      }
+    });
 
-    places.value = loadedPlaces.filter((item) => item.lat !== null && item.lng !== null);
+    places.value = Array.from(uniqueMap.values());
 
+    // 지도에 마커 렌더링
     renderPlaces();
     setStatus(`총 ${places.value.length}개 장소를 불러왔습니다.`);
   } catch (error) {
-    if (currentToken !== fetchRequestToken) {
-      return;
-    }
+    if (currentToken !== fetchRequestToken) return;
+    console.error(error);
     setStatus('장소 데이터를 불러오지 못했습니다.');
   }
 }
@@ -485,19 +544,17 @@ watch([selectedCategory, selectedRegion], (newValues, oldValues) => {
 });
 
 onMounted(() => {
-  // 🔥 전역 스코프에 브릿지 함수 등록 (인포윈도우의 onclick 속성에서 호출됨)
+  // 전역 스코프에 브릿지 함수 등록 (인포윈도우의 onclick 속성에서 호출됨)
   window.goToPost = (contentId) => {
     if (contentId) {
       router.push(`/posts?location_id=${contentId}`);
     } else {
-      // contentId가 없는 예외 케이스 처리 (알림 띄우기 등)
       alert('이 장소와 연결된 게시물 정보가 없습니다.');
     }
   };
 
-  window.setTimeout(() => {
-    loadKakaoMapSdk();
-  }, 100);
+  // 🌟 [수정] 불필요한 setTimeout 제거하고 마운트 시 즉시 지도 SDK 로딩을 시작합니다.
+  loadKakaoMapSdk();
 });
 </script>
 
