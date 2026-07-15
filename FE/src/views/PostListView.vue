@@ -357,7 +357,6 @@ const goToDetail = (id) => {
 
 <template>
   <div class="list-container">
-    
     <section class="write-accordion">
       <div class="accordion-header" @click="isFormOpen = !isFormOpen">
         <div class="header-text">
@@ -386,7 +385,11 @@ const goToDetail = (id) => {
 
           <div class="form-item">
             <label>제목</label>
-            <input v-model="newTitle" type="text" placeholder="명소를 드러내는 멋진 제목을 작성해 주세요" />
+            <input
+              v-model="newTitle"
+              type="text"
+              placeholder="명소를 드러내는 멋진 제목을 작성해 주세요"
+            />
           </div>
 
           <div class="form-item">
@@ -434,8 +437,16 @@ const goToDetail = (id) => {
           </div>
 
           <div class="form-item">
-            <label>비밀번호 설정 <span class="sub-label">(글 수정/삭제 시 필요합니다)</span></label>
-            <input v-model="newPassword" type="password" placeholder="비밀번호 4자리 입력" maxlength="8" />
+            <label
+              >비밀번호 설정
+              <span class="sub-label">(글 수정/삭제 시 필요합니다)</span></label
+            >
+            <input
+              v-model="newPassword"
+              type="password"
+              placeholder="비밀번호 4자리 입력"
+              maxlength="8"
+            />
           </div>
         </div>
 
@@ -503,7 +514,7 @@ const goToDetail = (id) => {
             <span class="category-badge">{{ post.category }}</span>
             <span class="location-badge">{{ post.region || '지역 미지정' }}</span>
           </div>
-          
+
           <div class="card-content">
             <h3 class="card-title">{{ post.title }}</h3>
             <p class="card-desc">{{ post.content.slice(0, 25) }}{{ post.content.length > 25 ? '...' : '' }}</p>
@@ -583,13 +594,13 @@ const goToDetail = (id) => {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-airbnb);
   overflow: hidden;
-  box-shadow: 0 6px 16px rgba(0,0,0,0.02);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.02);
   margin-bottom: 48px;
   transition: box-shadow 0.2s;
 }
 
 .write-accordion:hover {
-  box-shadow: 0 10px 24px rgba(0,0,0,0.05);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.05);
 }
 
 .accordion-header {
@@ -626,7 +637,7 @@ const goToDetail = (id) => {
 .accordion-content {
   padding: 0 30px 30px 30px;
   border-top: 1px solid var(--color-border);
-  background-color: #FCFCFC;
+  background-color: #fcfcfc;
 }
 
 .input-group {
@@ -659,7 +670,7 @@ const goToDetail = (id) => {
 .category-selector {
   display: flex;
   gap: 8px;
-  background-color: #EEEEEE;
+  background-color: #eeeeee;
   padding: 4px;
   border-radius: 10px;
   width: fit-content;
@@ -869,7 +880,10 @@ const goToDetail = (id) => {
 
 .grid-container {
   display: grid;
-  grid-template-columns: repeat(3, 1fr); /* 넓은 화면에서 한 줄에 무조건 3개씩 배치 */
+  grid-template-columns: repeat(
+    3,
+    1fr
+  ); /* 넓은 화면에서 한 줄에 무조건 3개씩 배치 */
   gap: 24px;
 }
 
@@ -900,7 +914,9 @@ const goToDetail = (id) => {
   border-radius: var(--radius-airbnb);
   overflow: hidden;
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
   position: relative;
   display: flex;
   flex-direction: column;

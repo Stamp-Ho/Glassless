@@ -4,14 +4,20 @@
     <div class="header-container">
       <!-- 서비스 이름 (GlassLESS - 더 단단하고 세련된 굵기로 수정) -->
       <h1 class="logo" @click="$router.push('/')">Glass<span>LESS</span></h1>
-      
+
       <!-- 정돈된 중앙 네비게이션 바 -->
       <nav class="nav-tabs">
-        <router-link to="/" class="nav-item" active-class="active">메인</router-link>
-        <router-link to="/posts" class="nav-item" active-class="active">게시물 목록</router-link>
-        <router-link to="/map" class="nav-item" active-class="active">지도 검색</router-link>
+        <router-link to="/" class="nav-item" active-class="active"
+          >메인</router-link
+        >
+        <router-link to="/posts" class="nav-item" active-class="active"
+          >게시물 목록</router-link
+        >
+        <router-link to="/map" class="nav-item" active-class="active"
+          >지도 검색</router-link
+        >
       </nav>
-      
+
       <!-- 우측 여백 보정용 스페이서 -->
       <div class="header-right-spacer"></div>
     </div>
@@ -76,7 +82,7 @@
 }
 
 .nav-item.active::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: -18px;
   left: 0;
@@ -90,6 +96,8 @@
 }
 
 @media (max-width: 768px) {
-  .header-right-spacer { display: none; }
+  .header-right-spacer {
+    display: none;
+  }
 }
 </style>
