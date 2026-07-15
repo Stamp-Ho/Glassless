@@ -28,6 +28,7 @@ class Post(Base):
         nullable=True,
         index=True,
     )
+    thumbnail_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     region: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
