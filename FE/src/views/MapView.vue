@@ -1,10 +1,10 @@
 <script setup>
 import { ref, shallowRef, computed, onMounted, watch } from 'vue';
-import { useRouter } from 'vue-router'; // 🔥 라우터 추가
+import { useRouter } from 'vue-router'; 
 
 const KAKAO_APP_KEY = import.meta.env.VITE_KAKAO_APP_KEY || '';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://glassless-be.onrender.com';
-const router = useRouter(); // 🔥 인스턴스 생성
+const router = useRouter(); 
 const SEARCH_RADIUS_KM = 5;
 
 // 상태 관리
@@ -19,6 +19,16 @@ const places = ref([]);
 const resultCount = ref(0);
 const mapMode = ref('fallback');
 const renderVersion = ref(0);
+
+// 🔥 길찾기(경로) 관련 상태
+const routeDeparture = ref(null);
+const routeArrival = ref(null);
+
+// WCONGNAMUL 좌표 보관용 (카카오맵 웹 자동 길찾기 필수값)
+const routeCoords = ref({
+  depX: null, depY: null,
+  arrX: null, arrY: null
+});
 
 // 카카오맵 마커 관련 상태
 let markers = [];
@@ -99,7 +109,7 @@ function normalizePlace(item) {
 
   return {
     id: `${kind}-${item.id}`,
-    contentId: item.id || '', // 🔥 URL 파라미터용 ID 보존
+    contentId: item.id || '',
     title: item.name,
     address: rawAddress || '주소 정보 없음',
     district: parsedDistrict || '기타',
@@ -107,7 +117,6 @@ function normalizePlace(item) {
     lng: isValidCoord ? lng : null,
     kind,
     categoryLabel,
-    // rating fields from backend (be flexible with possible keys)
     rating_avg: item.rating_avg ?? (item.rating && item.rating.avg) ?? item.rating_avg_value ?? null,
     rating_count: item.rating_count ?? (item.rating && item.rating.count) ?? item.rating_count_value ?? 0,
   };
@@ -154,21 +163,13 @@ function getCurrentMapCenter() {
     const fallback = REGION_CENTER_MAP[selectedRegion.value] || REGION_CENTER_MAP['서울'];
     return { mapx: fallback.lng, mapy: fallback.lat };
   }
-
   const center = map.value.getCenter();
-  return {
-    mapx: Number(center.getLng()),
-    mapy: Number(center.getLat()),
-  };
+  return { mapx: Number(center.getLng()), mapy: Number(center.getLat()) };
 }
 
 function scheduleCenterBasedFetch(delayMs = 10) {
-  if (centerFetchDebounceTimer) {
-    clearTimeout(centerFetchDebounceTimer);
-  }
-  centerFetchDebounceTimer = window.setTimeout(() => {
-    loadPlacesByFilters();
-  }, delayMs);
+  if (centerFetchDebounceTimer) clearTimeout(centerFetchDebounceTimer);
+  centerFetchDebounceTimer = window.setTimeout(() => { loadPlacesByFilters(); }, delayMs);
 }
 
 function renderPlaces(force = false) {
@@ -196,17 +197,10 @@ function renderPlaces(force = false) {
 
   try {
     const currentLevel = map.value.getLevel();
-    
-    // 🔥 [개선] 축소 레벨에 따라 성능 보호를 위해 화면에 그릴 마커 갯수를 유동적으로 조절합니다.
-    // 지도가 아주 많이 축소(level 8 이상)되어도 무조건 최소 15개~30개의 핀은 화면에 유지되도록 합니다.
     let levelBasedLimit = MAX_VISIBLE_MARKERS;
-    if (currentLevel >= 10) {
-      levelBasedLimit = 2; // 초광역 축소
-    } else if (currentLevel >= 8) {
-      levelBasedLimit = 40; // 광역 축소
-    }
+    if (currentLevel >= 10) levelBasedLimit = 2;
+    else if (currentLevel >= 8) levelBasedLimit = 40;
 
-    // 현재 지도 화면(Bounds) 안에 들어오는 장소 필터링
     const placesInViewport = getPlacesInBounds(filtered);
     const visiblePlaces = placesInViewport.slice(0, levelBasedLimit);
     
@@ -218,11 +212,8 @@ function renderPlaces(force = false) {
 
     const pinnedPlace = filtered.find((place) => place.id === pinnedPlaceId);
     
-    // 만약 화면 안에 들어오는 장소가 하나도 없다면? 
-    // 유저가 길을 잃지 않도록 전체 검색 리스트 중 첫 번째 장소(혹은 고정된 장소) 하나라도 강제로 렌더링 목록에 포함시킵니다.
     let placesToRender = [];
     if (visiblePlaces.length === 0 && filtered.length > 0) {
-      // 1순위: 고정(pinned)된 장소, 없으면 전체 리스트의 첫 번째 장소 선택
       const fallbackPlace = pinnedPlace || filtered[0];
       placesToRender = [fallbackPlace];
     } else {
@@ -236,28 +227,22 @@ function renderPlaces(force = false) {
 
       const existingMarker = markerById[place.id];
       if (existingMarker) {
-        if (!existingMarker.getMap()) {
-          existingMarker.setMap(map.value);
-        }
+        if (!existingMarker.getMap()) existingMarker.setMap(map.value);
         nextVisibleIds.add(place.id);
         return;
       }
 
       const position = new window.kakao.maps.LatLng(place.lat, place.lng);
       const marker = new window.kakao.maps.Marker({
-        position, 
-        map: map.value, 
-        title: place.title,
+        position, map: map.value, title: place.title,
         image: createMarkerImage(markerColorMap[place.kind] || '#2e86de'),
       });
 
-      // 마커 클릭 이벤트 리스너 - 클릭 시 서버에서 상세(평점) 정보를 가져와 InfoWindow를 표시
       window.kakao.maps.event.addListener(marker, 'click', async () => {
         markers.forEach(m => m.setZIndex(0));
         marker.setZIndex(9999);
         if (infoWindow) infoWindow.close();
 
-        // show temporary loading info
         infoWindow = new window.kakao.maps.InfoWindow({ 
           content: `<div style="padding:14px; width:220px; box-sizing:border-box; font-family:sans-serif;">로딩 중...</div>`,
           zIndex: 10000 
@@ -271,15 +256,15 @@ function renderPlaces(force = false) {
           const avg = detail?.rating_avg ?? place.rating_avg ?? null;
           const count = detail?.rating_count ?? place.rating_count ?? 0;
 
-          const starsHtml = (() => {
-            if (!avg) return '';
+          let starsHtml = '';
+          if (avg) {
             const rounded = Math.round(Number(avg));
             let s = '';
             for (let i = 1; i <= 5; i++) {
               s += `<span style=\"color:${i<=rounded ? '#FFD54A' : '#dcdcdc'};font-size:14px;margin-right:2px;\">★</span>`;
             }
-            return `<div style=\"margin:6px 0; display:flex; align-items:center; gap:6px;\">${s}<small style=\"color:#666; font-size:12px;\">${Number(avg).toFixed(1)} (${count})</small></div>`;
-          })();
+            starsHtml = `<div style=\"margin:6px 0; display:flex; align-items:center; gap:6px;\">${s}<small style=\"color:#666; font-size:12px;\">${Number(avg).toFixed(1)} (${count})</small></div>`;
+          }
 
           const contentHtml = `
             <div style="padding:14px; width:260px; box-sizing:border-box; font-family:sans-serif; white-space:normal; word-break:keep-all;">
@@ -291,6 +276,10 @@ function renderPlaces(force = false) {
               </div>
               <div style="font-size:12px; color:#555; line-height:1.5;">${place.address}</div>
               ${starsHtml}
+              <div style="margin-top:12px; display:flex; gap:6px;">
+                <button onclick="window.setDepartureFromMap('${place.id}')" style="flex:1; background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:6px; font-size:12px; font-weight:bold; color:#475569; cursor:pointer;">출발지로 설정</button>
+                <button onclick="window.setArrivalFromMap('${place.id}')" style="flex:1; background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:6px; font-size:12px; font-weight:bold; color:#475569; cursor:pointer;">도착지로 설정</button>
+              </div>
             </div>
           `;
 
@@ -305,7 +294,6 @@ function renderPlaces(force = false) {
       nextVisibleIds.add(place.id);
     });
 
-    // 화면 밖으로 벗어난 마커 지우기
     for (const id in markerById) {
       if (!nextVisibleIds.has(id)) {
         const marker = markerById[id];
@@ -315,7 +303,6 @@ function renderPlaces(force = false) {
       }
     }
 
-    // 상태 메시지 업데이트
     if (currentLevel >= 8) {
       setStatus(`지도가 축소되어 주요 장소 ${placesToRender.length}개만 필터링하여 표시합니다.`);
     } else if (placesToRender.length) {
@@ -333,7 +320,6 @@ function renderPlaces(force = false) {
   }
 }
 
-//
 function initMap() {
   if (mapInitAttempted && map.value) return;
   mapInitAttempted = true;
@@ -346,7 +332,6 @@ function initMap() {
 
   try {
     container.innerHTML = '';
-    // 초기 설정 지역의 중심 좌표 가져오기
     const initialCenter = REGION_CENTER_MAP[selectedRegion.value] || REGION_CENTER_MAP['서울'];
     
     const options = {
@@ -369,13 +354,10 @@ function initMap() {
       scheduleCenterBasedFetch(200);
     });
 
-    // 🌟 [수정] 지도 생성 완료 직후, 첫 장소 목록을 명시적으로 즉시 호출합니다.
     loadPlacesByFilters();
-    
   } catch (error) {
     console.error('지도 초기화 실패:', error);
     mapMode.value = 'fallback';
-    // 지도 로드 실패 시에도 리스트는 보일 수 있도록 대체 데이터 로드 진행
     loadPlacesByFilters();
   }
 }
@@ -393,7 +375,7 @@ function loadKakaoMapSdk() {
     if (window.kakao && window.kakao.maps) window.kakao.maps.load(() => initMap());
     else {
       mapMode.value = 'fallback';
-      loadPlacesByFilters(); // SDK 로드 실패 시에도 데이터 로드 시도
+      loadPlacesByFilters(); 
     }
   };
   document.head.appendChild(script);
@@ -405,7 +387,6 @@ async function loadPlacesByFilters() {
     setStatus('장소 데이터를 조회 중입니다...');
     const center = getCurrentMapCenter();
     
-    // API 공통 파라미터 빌더
     const createParams = (categoryName, limitValue, offset) => {
       const params = new URLSearchParams();
       params.set('region', selectedRegion.value);
@@ -422,53 +403,31 @@ async function loadPlacesByFilters() {
 
     let rawPlaces = [];
 
-    // 🌟 카테고리가 '전체(all)'일 때 병렬 요청 처리 (총 300개 target)
     if (selectedCategory.value === 'all') {
-      // 대표적으로 고르게 섞여 나오기 좋은 3대 카테고리 선정
       const targetCategories = ['관광지', '레포츠', '문화시설', '쇼핑', '여행코스', '숙박', '축제공연행사'];
-      
-      // 3개의 요청을 동시에(병렬) 보냅니다. (각 100개씩)
       const fetchPromises = targetCategories.map(cat => 
         fetch(`${API_BASE_URL}/api/locations?${createParams(cat, 30)}`)
-          .then(res => {
-            if (!res.ok) throw new Error();
-            return res.json();
-          })
-          .catch(() => []) // 특정 카테고리 에러 시 빈 배열 반환하여 전체 병렬 처리가 깨지지 않도록 방어
+          .then(res => res.ok ? res.json() : [])
+          .catch(() => []) 
       );
-
       const results = await Promise.all(fetchPromises);
-      
       if (currentToken !== fetchRequestToken) return;
-
-      // 병렬 결과를 하나의 배열로 병합
       rawPlaces = results.flat();
-    } 
-    // 특정 단일 카테고리 선택 시 (기존 로직 유지 - 100개)
-    else {
+    } else {
       const categoryParam = CATEGORY_PARAM_MAP[selectedCategory.value] || null;
-      
-      // offset 0(1~100번째)과 offset 100(101~200번째) 요청을 동시에 보냅니다.
       const offsets = [0, 100];
       const fetchPromises = offsets.map(offset => 
         fetch(`${API_BASE_URL}/api/locations?${createParams(categoryParam, 100, offset)}`)
-          .then(res => {
-            if (!res.ok) throw new Error();
-            return res.json();
-          })
+          .then(res => res.ok ? res.json() : [])
           .catch(() => [])
       );
-
       const results = await Promise.all(fetchPromises);
       if (currentToken !== fetchRequestToken) return;
-      console.log(results.flat());
-
       rawPlaces = results.flat();
     }
 
     if (currentToken !== fetchRequestToken) return;
 
-    // 데이터 가공 및 중복 제거
     const normalized = Array.isArray(rawPlaces) 
       ? rawPlaces.map((item) => normalizePlace(item)) 
       : [];
@@ -476,18 +435,15 @@ async function loadPlacesByFilters() {
     const uniqueMap = new Map();
     normalized.forEach(item => {
       if (item.lat !== null && item.lng !== null) {
-        uniqueMap.set(item.id, item); // ID 기준 중복 제거
+        uniqueMap.set(item.id, item); 
       }
     });
 
     places.value = Array.from(uniqueMap.values());
-
-    // 지도에 마커 렌더링
     renderPlaces();
     setStatus(`총 ${places.value.length}개 장소를 불러왔습니다.`);
   } catch (error) {
     if (currentToken !== fetchRequestToken) return;
-    console.error(error);
     setStatus('장소 데이터를 불러오지 못했습니다.');
   }
 }
@@ -511,14 +467,11 @@ function focusPlace(place) {
   map.value.setCenter(new window.kakao.maps.LatLng(place.lat, place.lng));
   map.value.setLevel(4);
 
-  // 🔥 1. 모든 마커의 zIndex 초기화
   markers.forEach(m => m.setZIndex(0));
-  // 🔥 2. 선택된 마커를 맨 앞으로 가져오기
   marker.setZIndex(9999);
 
   if (infoWindow) infoWindow.close();
   
-  // show loading infoWindow while fetching details
   infoWindow = new window.kakao.maps.InfoWindow({ 
     content: `<div style="padding:14px; width:220px; box-sizing:border-box; font-family:sans-serif;">로딩 중...</div>`,
     zIndex: 10000
@@ -541,6 +494,7 @@ function focusPlace(place) {
         starsSection = `<div style=\"margin:6px 0; display:flex; align-items:center; gap:6px;\">${s}<small style=\"color:#666; font-size:12px;\">${Number(avg).toFixed(1)} (${count})</small></div>`;
       }
 
+      // 🔥 InfoWindow 내부 출발/도착 설정 버튼 
       const contentHtml = `
         <div style="padding:14px; width:260px; box-sizing:border-box; font-family:sans-serif; white-space:normal; word-break:keep-all;">
           <div 
@@ -551,6 +505,10 @@ function focusPlace(place) {
           </div>
           <div style="font-size:12px; color:#555; line-height:1.5;">${place.address}</div>
           ${starsSection}
+          <div style="margin-top:12px; display:flex; gap:6px;">
+            <button onclick="window.setDepartureFromMap('${place.id}')" style="flex:1; background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:6px; font-size:12px; font-weight:bold; color:#475569; cursor:pointer;">출발지로 설정</button>
+            <button onclick="window.setArrivalFromMap('${place.id}')" style="flex:1; background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:6px; font-size:12px; font-weight:bold; color:#475569; cursor:pointer;">도착지로 설정</button>
+          </div>
         </div>
       `;
       infoWindow.setContent(contentHtml);
@@ -560,6 +518,72 @@ function focusPlace(place) {
   })();
   
   window.setTimeout(() => { if (map.value) map.value.relayout(); }, 0);
+}
+
+// 🔥 WGS84 좌표를 WCONGNAMUL(카카오전용)로 변환 및 상태 저장 
+function setDeparture(place) { 
+  routeDeparture.value = place;
+  routeCoords.value.depX = null;
+  routeCoords.value.depY = null;
+  
+  if (window.kakao && window.kakao.maps && window.kakao.maps.services) {
+    const geocoder = new window.kakao.maps.services.Geocoder();
+    geocoder.transCoord(place.lng, place.lat, (res, status) => {
+      if (status === window.kakao.maps.services.Status.OK) {
+        routeCoords.value.depX = res[0].x;
+        routeCoords.value.depY = res[0].y;
+      }
+    }, { input_coord: window.kakao.maps.services.Coords.WGS84, output_coord: window.kakao.maps.services.Coords.WCONGNAMUL });
+  }
+}
+
+function setArrival(place) { 
+  routeArrival.value = place; 
+  routeCoords.value.arrX = null;
+  routeCoords.value.arrY = null;
+
+  if (window.kakao && window.kakao.maps && window.kakao.maps.services) {
+    const geocoder = new window.kakao.maps.services.Geocoder();
+    geocoder.transCoord(place.lng, place.lat, (res, status) => {
+      if (status === window.kakao.maps.services.Status.OK) {
+        routeCoords.value.arrX = res[0].x;
+        routeCoords.value.arrY = res[0].y;
+      }
+    }, { input_coord: window.kakao.maps.services.Coords.WGS84, output_coord: window.kakao.maps.services.Coords.WCONGNAMUL });
+  }
+}
+
+function clearDeparture() { 
+  routeDeparture.value = null; 
+  routeCoords.value.depX = null;
+  routeCoords.value.depY = null;
+}
+
+function clearArrival() { 
+  routeArrival.value = null; 
+  routeCoords.value.arrX = null;
+  routeCoords.value.arrY = null;
+}
+
+// 🔥 카카오맵 웹 브라우저 (PC/모바일 통합) 자동 경로 URL 생성
+function openKakaoRoute() {
+  if (!routeDeparture.value || !routeArrival.value) return;
+  if (!routeCoords.value.depX || !routeCoords.value.arrX) {
+    alert('좌표 변환이 진행 중입니다. 1~2초 뒤에 다시 시도해 주세요.');
+    return;
+  }
+  
+  const sName = encodeURIComponent(routeDeparture.value.title);
+  const sX = routeCoords.value.depX;
+  const sY = routeCoords.value.depY;
+  
+  const eName = encodeURIComponent(routeArrival.value.title);
+  const eX = routeCoords.value.arrX;
+  const eY = routeCoords.value.arrY;
+  
+  // WCONGNAMUL 좌표가 포함된 완벽한 카카오 길찾기 URL (자동 검색 수행됨)
+  const url = `https://map.kakao.com/?sName=${sName}&sX=${sX}&sY=${sY}&eName=${eName}&eX=${eX}&eY=${eY}`;
+  window.open(url, '_blank');
 }
 
 const filteredPlaces = computed(() => {
@@ -590,16 +614,21 @@ watch([selectedCategory, selectedRegion], (newValues, oldValues) => {
 });
 
 onMounted(() => {
-  // 전역 스코프에 브릿지 함수 등록 (인포윈도우의 onclick 속성에서 호출됨)
   window.goToPost = (contentId) => {
-    if (contentId) {
-      router.push(`/posts?location_id=${contentId}`);
-    } else {
-      alert('이 장소와 연결된 게시물 정보가 없습니다.');
-    }
+    if (contentId) router.push(`/posts?location_id=${contentId}`);
+    else alert('이 장소와 연결된 게시물 정보가 없습니다.');
   };
 
-  // 🌟 [수정] 불필요한 setTimeout 제거하고 마운트 시 즉시 지도 SDK 로딩을 시작합니다.
+  window.setDepartureFromMap = (id) => {
+    const place = places.value.find(p => p.id === id);
+    if (place) setDeparture(place);
+  };
+
+  window.setArrivalFromMap = (id) => {
+    const place = places.value.find(p => p.id === id);
+    if (place) setArrival(place);
+  };
+
   loadKakaoMapSdk();
 });
 </script>
@@ -632,6 +661,37 @@ onMounted(() => {
         </div>
       </div>
 
+      <div class="route-panel">
+        <div class="route-panel-header">
+          <h3>길찾기</h3>
+        </div>
+        <div class="route-points">
+          <div class="route-point">
+            <span class="route-label dep">출발</span>
+            <div class="route-value-box">
+              <span v-if="routeDeparture" class="route-value">{{ routeDeparture.title }}</span>
+              <span v-else class="route-placeholder">목록/지도에서 출발지를 선택하세요</span>
+              <button v-if="routeDeparture" class="btn-clear-route" @click="clearDeparture">✕</button>
+            </div>
+          </div>
+          <div class="route-point">
+            <span class="route-label arr">도착</span>
+            <div class="route-value-box">
+              <span v-if="routeArrival" class="route-value">{{ routeArrival.title }}</span>
+              <span v-else class="route-placeholder">목록/지도에서 도착지를 선택하세요</span>
+              <button v-if="routeArrival" class="btn-clear-route" @click="clearArrival">✕</button>
+            </div>
+          </div>
+        </div>
+        <button 
+          class="btn-find-route" 
+          :disabled="!routeDeparture || !routeArrival || !routeCoords.depX || !routeCoords.arrX" 
+          @click="openKakaoRoute"
+        >
+          카카오맵으로 경로 보기
+        </button>
+      </div>
+
       <div class="list-section">
         <div class="list-header">
           <h3>표시된 장소</h3>
@@ -653,6 +713,11 @@ onMounted(() => {
             </div>
             <div class="item-category">{{ place.categoryLabel }}</div>
             <div class="item-address">{{ place.address }}</div>
+            
+            <div class="item-route-actions">
+              <button class="btn-set-route dep" @click.stop="setDeparture(place)">출발</button>
+              <button class="btn-set-route arr" @click.stop="setArrival(place)">도착</button>
+            </div>
           </li>
         </ul>
         <div v-else class="empty-state">표시할 장소가 없습니다. 다른 필터를 선택해 보세요.</div>
@@ -696,14 +761,14 @@ onMounted(() => {
   font-size: 0.75rem;
   color: var(--color-airbnb-gray);
   line-height: 1.4;
-  min-height: 20px;
+  margin: 0;
 }
 
 .filter-group {
-  margin-top: 28px;
+  margin-top: 24px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .filter-item {
@@ -724,10 +789,9 @@ onMounted(() => {
   width: 100%;
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  padding: 12px 14px;
+  padding: 10px 14px;
   font-size: 0.9rem;
   outline: none;
-  transition: border-color 0.2s;
   background-color: #FAFAFA;
   cursor: pointer;
 }
@@ -737,8 +801,110 @@ onMounted(() => {
   background-color: white;
 }
 
+.route-panel {
+  margin-top: 24px;
+  background-color: #f7f9fc;
+  border: 1px solid #e1e7f0;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.route-panel-header h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-airbnb-dark);
+}
+
+.route-points {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.route-point {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.route-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.route-label.dep { background-color: #3b82f6; }
+.route-label.arr { background-color: #ef4444; }
+
+.route-value-box {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: white;
+  border: 1px solid #e1e7f0;
+  border-radius: 6px;
+  padding: 6px 10px;
+  min-height: 32px;
+}
+
+.route-value {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-airbnb-dark);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 170px;
+}
+
+.route-placeholder {
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+.btn-clear-route {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.btn-clear-route:hover { color: #4b5563; }
+
+.btn-find-route {
+  background-color: var(--color-airbnb-dark);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-find-route:disabled {
+  background-color: #cbd5e1;
+  cursor: not-allowed;
+}
+
+.btn-find-route:not(:disabled):hover {
+  opacity: 0.9;
+}
+
 .list-section {
-  margin-top: 28px;
+  margin-top: 24px;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -779,12 +945,14 @@ onMounted(() => {
 }
 
 .place-item {
-  padding: 12px;
+  padding: 14px;
   border: 1px solid var(--color-border);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
   background-color: white;
+  display: flex;
+  flex-direction: column;
 }
 
 .place-item:hover {
@@ -795,7 +963,7 @@ onMounted(() => {
 
 .item-title {
   font-size: 0.9rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--color-airbnb-dark);
   margin-bottom: 4px;
   white-space: nowrap;
@@ -803,13 +971,18 @@ onMounted(() => {
   text-overflow: ellipsis;
 }
 
+.item-rating { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.loc-stars { display:flex; gap:4px; }
+.loc-star { color: #dcdcdc; font-size:0.9rem; }
+.loc-star.filled { color: #FFD54A; }
+.rating-text { color: var(--color-airbnb-gray); font-size:0.8rem; }
+
 .item-category {
   font-size: 0.7rem;
   font-weight: 600;
   color: var(--color-airbnb-red);
   margin-bottom: 4px;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
 }
 
 .item-address {
@@ -821,11 +994,27 @@ onMounted(() => {
   text-overflow: ellipsis;
 }
 
-.item-rating { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
-.loc-stars { display:flex; gap:4px; }
-.loc-star { color: #dcdcdc; font-size:0.95rem; }
-.loc-star.filled { color: #FFD54A; }
-.rating-text { color: var(--color-airbnb-gray); font-size:0.8rem; }
+.item-route-actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 6px;
+}
+
+.btn-set-route {
+  flex: 1;
+  background-color: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 6px 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-set-route.dep:hover { background-color: #eff6ff; border-color: #93c5fd; color: #1d4ed8; }
+.btn-set-route.arr:hover { background-color: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
 
 .empty-state {
   display: flex;
@@ -849,15 +1038,6 @@ onMounted(() => {
   height: 100%;
 }
 
-.highlight {
-  display: inline-block;
-  margin-top: 12px;
-  font-size: 0.8rem;
-  color: var(--color-airbnb-red);
-  font-weight: 600;
-}
-
-/* 모바일/태블릿 반응형 */
 @media (max-width: 768px) {
   .map-search-layout {
     flex-direction: column;
