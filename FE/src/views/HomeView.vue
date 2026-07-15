@@ -457,6 +457,7 @@ const goToPostDetail = (postId) => {
 .weather-header {
   margin-bottom: 20px;
   padding-bottom: 16px;
+  border-radius: 10px;
   border-bottom: 2px solid #2bcbba;
 }
 
