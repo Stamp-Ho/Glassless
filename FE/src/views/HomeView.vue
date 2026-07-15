@@ -1,6 +1,6 @@
 <script setup>
-import { ref, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, onMounted } from "vue";
+import { useRouter } from "vue-router";
 
 const router = useRouter();
 const previewPosts = ref([]);
@@ -20,7 +20,7 @@ onMounted(async () => {
     }
 
     if (!response.ok) {
-      throw new Error('네트워크 응답 불안정');
+      throw new Error("네트워크 응답 불안정");
     }
 
     const allPosts = await response.json();
@@ -31,7 +31,6 @@ onMounted(async () => {
     } else {
       previewPosts.value = [];
     }
-
   } catch (error) {
     // 통신 실패 혹은 예외 상황 시 화면에 에러를 노출하지 않고 조용히 빈 화면 처리
     console.error("데이터 로드 실패 (422 처리 포함):", error);
@@ -40,7 +39,7 @@ onMounted(async () => {
 });
 
 const goToPostList = () => {
-  router.push('/posts');
+  router.push("/posts");
 };
 </script>
 
@@ -61,14 +60,14 @@ const goToPostList = () => {
       </div>
 
       <div class="slider-container no-scrollbar">
-        <div 
-          v-for="post in previewPosts" 
-          :key="post.id" 
+        <div
+          v-for="post in previewPosts"
+          :key="post.id"
           class="preview-card"
           @click="goToPostList"
         >
           <div class="card-image-placeholder">
-            <span class="badge">{{ post.region || '지역 정보 없음' }}</span>
+            <span class="badge">{{ post.region || "지역 정보 없음" }}</span>
           </div>
           <div class="card-info">
             <h3 class="card-title">{{ post.title }}</h3>
@@ -88,7 +87,7 @@ const goToPostList = () => {
 .hero-map-section {
   width: 100%;
   height: 320px;
-  background-color: #E3ECE9;
+  background-color: #e3ece9;
   position: relative;
   overflow: hidden;
 }
@@ -96,9 +95,13 @@ const goToPostList = () => {
 .map-preview {
   width: 100%;
   height: 100%;
-  background-image: radial-gradient(circle, #CFDDD8 10%, transparent 10.5%), radial-gradient(circle, #CFDDD8 10%, transparent 10.5%);
+  background-image:
+    radial-gradient(circle, #cfddd8 10%, transparent 10.5%),
+    radial-gradient(circle, #cfddd8 10%, transparent 10.5%);
   background-size: 20px 20px;
-  background-position: 0 0, 10px 10px;
+  background-position:
+    0 0,
+    10px 10px;
   position: relative;
 }
 
@@ -114,8 +117,10 @@ const goToPostList = () => {
   font-weight: 600;
   border-radius: 8px;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  transition: transform 0.2s, background-color 0.2s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition:
+    transform 0.2s,
+    background-color 0.2s;
 }
 
 .btn-map-sm:hover {
@@ -166,7 +171,9 @@ const goToPostList = () => {
   overflow: hidden;
   cursor: pointer;
   snap-align: start;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
 }
 
 @media (max-width: 1100px) {
@@ -177,12 +184,12 @@ const goToPostList = () => {
 
 .preview-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 24px rgba(0,0,0,0.06);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
 }
 
 .card-image-placeholder {
   height: 150px;
-  background-color: #EBEBEB;
+  background-color: #ebebeb;
   position: relative;
   display: flex;
   align-items: flex-end;
@@ -195,7 +202,7 @@ const goToPostList = () => {
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 700;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .card-info {

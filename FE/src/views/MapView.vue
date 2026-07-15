@@ -1,38 +1,39 @@
 <script setup>
-import { ref } from 'vue';
+import { ref } from "vue";
 
 // 검색 조건 상태 관리
-const searchRegion = ref('');
+const searchRegion = ref("");
 const selectedActivities = ref([]);
 
 // 제공할 액티비티 목록 데이터
 const activities = [
-  { id: 'cafe', label: '☕ 감성 카페 탐방' },
-  { id: 'trekking', label: '🥾 하이킹/트래킹' },
-  { id: 'ocean', label: '🏖️ 해변/수상 레저' },
-  { id: 'museum', label: '🏛️ 역사/박물관' },
-  { id: 'night', label: '🌃 야경 명소' }
+  { id: "cafe", label: "☕ 감성 카페 탐방" },
+  { id: "trekking", label: "🥾 하이킹/트래킹" },
+  { id: "ocean", label: "🏖️ 해변/수상 레저" },
+  { id: "museum", label: "🏛️ 역사/박물관" },
+  { id: "night", label: "🌃 야경 명소" },
 ];
 
 // 검색 실행 함수
 const handleSearch = () => {
-  alert(`검색 요청\n지역: ${searchRegion.value || '전체'}\n선택한 활동: ${selectedActivities.value.join(', ') || '없음'}`);
+  alert(
+    `검색 요청\n지역: ${searchRegion.value || "전체"}\n선택한 활동: ${selectedActivities.value.join(", ") || "없음"}`,
+  );
   // 추후 여기에 지도 API 마커 필터링 로직이 연동됩니다!
 };
 
 // 필터 초기화
 const resetFilters = () => {
-  searchRegion.value = '';
+  searchRegion.value = "";
   selectedActivities.value = [];
 };
 </script>
 
 <template>
   <div class="map-search-layout">
-    
     <aside class="search-sidebar">
       <div class="sidebar-header">
-        <h2>어떤 여행을 <br>원하시나요?</h2>
+        <h2>어떤 여행을 <br />원하시나요?</h2>
         <p>조건에 맞는 지역 명소를 지도에서 찾아보세요.</p>
       </div>
 
@@ -40,10 +41,10 @@ const resetFilters = () => {
         <div class="filter-item">
           <label class="filter-label">여행 지역</label>
           <div class="input-wrapper">
-            <input 
-              v-model="searchRegion" 
-              type="text" 
-              placeholder="예: 부산 수영구, 제주 애월읍" 
+            <input
+              v-model="searchRegion"
+              type="text"
+              placeholder="예: 부산 수영구, 제주 애월읍"
               @keyup.enter="handleSearch"
             />
           </div>
@@ -52,14 +53,17 @@ const resetFilters = () => {
         <div class="filter-item">
           <label class="filter-label">원하는 활동 (중복 선택)</label>
           <div class="activity-grid">
-            <label 
-              v-for="act in activities" 
-              :key="act.id" 
-              :class="['activity-checkbox-card', { checked: selectedActivities.includes(act.label) }]"
+            <label
+              v-for="act in activities"
+              :key="act.id"
+              :class="[
+                'activity-checkbox-card',
+                { checked: selectedActivities.includes(act.label) },
+              ]"
             >
-              <input 
-                type="checkbox" 
-                :value="act.label" 
+              <input
+                type="checkbox"
+                :value="act.label"
                 v-model="selectedActivities"
               />
               <span>{{ act.label }}</span>
@@ -80,13 +84,14 @@ const resetFilters = () => {
           <span class="map-icon">🗺️</span>
           <h3>여기는 실시간 지도 영역입니다</h3>
           <p>
-            현재 선택된 필터에 매칭되는 명소들이 지도 위에 마커로 표시됩니다.<br>
-            <span class="highlight">(추후 Kakao Maps 또는 Google Maps API 장착 공간)</span>
+            현재 선택된 필터에 매칭되는 명소들이 지도 위에 마커로 표시됩니다.<br />
+            <span class="highlight"
+              >(추후 Kakao Maps 또는 Google Maps API 장착 공간)</span
+            >
           </p>
         </div>
       </div>
     </main>
-
   </div>
 </template>
 
@@ -156,7 +161,7 @@ const resetFilters = () => {
   font-size: 0.95rem;
   outline: none;
   transition: border-color 0.2s;
-  background-color: #FAFAFA;
+  background-color: #fafafa;
 }
 
 .input-wrapper input:focus {
@@ -197,14 +202,14 @@ const resetFilters = () => {
 }
 
 .activity-checkbox-card:hover {
-  background-color: #FAFAFA;
+  background-color: #fafafa;
   border-color: var(--color-airbnb-gray);
 }
 
 /* 체크됐을 때 카드 보더 하이라이팅 */
 .activity-checkbox-card.checked {
   border-color: var(--color-airbnb-red);
-  background-color: #FFF0F2;
+  background-color: #fff0f2;
 }
 
 /* 사이드바 하단 버튼 영역 */
@@ -229,7 +234,7 @@ const resetFilters = () => {
 }
 
 .btn-reset:hover {
-  background-color: #F5F5F5;
+  background-color: #f5f5f5;
   color: var(--color-airbnb-dark);
 }
 
@@ -254,16 +259,20 @@ const resetFilters = () => {
 .map-viewport {
   flex: 1;
   height: 100%;
-  background-color: #E3ECE9; /* 세련된 미색 지도 배경 */
+  background-color: #e3ece9; /* 세련된 미색 지도 배경 */
   position: relative;
 }
 
 .map-placeholder {
   width: 100%;
   height: 100%;
-  background-image: radial-gradient(circle, #CFDDD8 10%, transparent 10.5%), radial-gradient(circle, #CFDDD8 10%, transparent 10.5%);
+  background-image:
+    radial-gradient(circle, #cfddd8 10%, transparent 10.5%),
+    radial-gradient(circle, #cfddd8 10%, transparent 10.5%);
   background-size: 24px 24px;
-  background-position: 0 0, 12px 12px;
+  background-position:
+    0 0,
+    12px 12px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -276,7 +285,7 @@ const resetFilters = () => {
   backdrop-filter: blur(10px);
   padding: 40px;
   border-radius: var(--radius-airbnb);
-  box-shadow: 0 20px 50px rgba(0,0,0,0.08);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.08);
   text-align: center;
   max-width: 460px;
 }
@@ -315,14 +324,14 @@ const resetFilters = () => {
     height: auto;
     overflow: visible;
   }
-  
+
   .search-sidebar {
     width: 100%;
     height: auto;
     border-right: none;
     border-bottom: 1px solid var(--color-border);
   }
-  
+
   .map-viewport {
     height: 400px;
   }

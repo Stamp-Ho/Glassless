@@ -1,42 +1,71 @@
 <script setup>
-import { ref, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, onMounted } from "vue";
+import { useRouter } from "vue-router";
 
 const router = useRouter();
 const posts = ref([]);
 
 // 입력 폼 상태 관리
 const isFormOpen = ref(false); // 클릭 시 폼 열기/닫기 토글용
-const selectedCategory = ref('잡담'); // 기본값 '잡담'
-const newTitle = ref('');
-const newLocation = ref('');
-const newDesc = ref('');
-const newPassword = ref('');
+const selectedCategory = ref("잡담"); // 기본값 '잡담'
+const newTitle = ref("");
+const newLocation = ref("");
+const newDesc = ref("");
+const newPassword = ref("");
 
 // 삭제 검증용 상태 관리
 const activeDeleteId = ref(null);
-const deletePassword = ref('');
+const deletePassword = ref("");
 
 onMounted(() => {
-  const savedPosts = localStorage.getItem('localhub_posts');
+  const savedPosts = localStorage.getItem("localhub_posts");
   if (savedPosts) {
     posts.value = JSON.parse(savedPosts);
   } else {
     // 카테고리와 임시 비밀번호('1234')가 포함된 초기 데이터 세팅
     const dummy = [
-      { id: 1, category: '후기', title: '부산 광안리 드론쇼 명당 공유', location: '부산 수영구', desc: '여기 카페 2층 테라스가 숨겨진 뷰 맛집입니다.', password: '1234', likes: 12 },
-      { id: 2, category: '잡담', title: '경주 황리단길 주차 꿀팁', location: '경북 경주시', desc: '주말에는 공영주차장 말고 이 골목을 이용해보세요.', password: '1234', likes: 45 },
-      { id: 3, category: '구인', title: '이번주 토요일 애월 해안가 플로깅 하실 분!', location: '제주 애월읍', desc: '오전 10시에 투썸 앞에서 모여서 가볍게 쓰레기 줍고 커피 마셔요.', password: '1234', likes: 8 }
+      {
+        id: 1,
+        category: "후기",
+        title: "부산 광안리 드론쇼 명당 공유",
+        location: "부산 수영구",
+        desc: "여기 카페 2층 테라스가 숨겨진 뷰 맛집입니다.",
+        password: "1234",
+        likes: 12,
+      },
+      {
+        id: 2,
+        category: "잡담",
+        title: "경주 황리단길 주차 꿀팁",
+        location: "경북 경주시",
+        desc: "주말에는 공영주차장 말고 이 골목을 이용해보세요.",
+        password: "1234",
+        likes: 45,
+      },
+      {
+        id: 3,
+        category: "구인",
+        title: "이번주 토요일 애월 해안가 플로깅 하실 분!",
+        location: "제주 애월읍",
+        desc: "오전 10시에 투썸 앞에서 모여서 가볍게 쓰레기 줍고 커피 마셔요.",
+        password: "1234",
+        likes: 8,
+      },
     ];
     posts.value = dummy;
-    localStorage.setItem('localhub_posts', JSON.stringify(dummy));
+    localStorage.setItem("localhub_posts", JSON.stringify(dummy));
   }
 });
 
 // 게시글 추가
 const addPost = () => {
-  if (!newTitle.value || !newLocation.value || !newDesc.value || !newPassword.value) {
-    alert('모든 빈칸과 비밀번호를 입력해주세요!');
+  if (
+    !newTitle.value ||
+    !newLocation.value ||
+    !newDesc.value ||
+    !newPassword.value
+  ) {
+    alert("모든 빈칸과 비밀번호를 입력해주세요!");
     return;
   }
 
@@ -47,18 +76,18 @@ const addPost = () => {
     location: newLocation.value,
     desc: newDesc.value,
     password: newPassword.value, // 비밀번호 저장
-    likes: 0
+    likes: 0,
   };
 
   posts.value.unshift(newPost);
-  localStorage.setItem('localhub_posts', JSON.stringify(posts.value));
+  localStorage.setItem("localhub_posts", JSON.stringify(posts.value));
 
   // 입력창 초기화 및 폼 닫기
-  newTitle.value = '';
-  newLocation.value = '';
-  newDesc.value = '';
-  newPassword.value = '';
-  selectedCategory.value = '잡담';
+  newTitle.value = "";
+  newLocation.value = "";
+  newDesc.value = "";
+  newPassword.value = "";
+  selectedCategory.value = "잡담";
   isFormOpen.value = false;
 };
 
@@ -69,22 +98,22 @@ const requestDelete = (e, id) => {
     activeDeleteId.value = null;
   } else {
     activeDeleteId.value = id;
-    deletePassword.value = '';
+    deletePassword.value = "";
   }
 };
 
 // 비밀번호 검증 후 삭제 처리
 const confirmDelete = (e, id) => {
   e.stopPropagation();
-  const targetPost = posts.value.find(p => p.id === id);
-  
+  const targetPost = posts.value.find((p) => p.id === id);
+
   if (targetPost.password === deletePassword.value) {
-    posts.value = posts.value.filter(p => p.id !== id);
-    localStorage.setItem('localhub_posts', JSON.stringify(posts.value));
+    posts.value = posts.value.filter((p) => p.id !== id);
+    localStorage.setItem("localhub_posts", JSON.stringify(posts.value));
     activeDeleteId.value = null;
-    alert('게시글이 삭제되었습니다.');
+    alert("게시글이 삭제되었습니다.");
   } else {
-    alert('비밀번호가 일치하지 않습니다.');
+    alert("비밀번호가 일치하지 않습니다.");
   }
 };
 
@@ -95,12 +124,13 @@ const goToDetail = (id) => {
 
 <template>
   <div class="list-container">
-    
     <section class="write-accordion">
       <div class="accordion-header" @click="isFormOpen = !isFormOpen">
         <div class="header-text">
           <h2>명소에 대한 생각이나 이야기를 공유해주세요!</h2>
-          <p>이곳을 클릭하여 동네의 숨겨진 이야기와 유용한 꿀팁을 들려주세요.</p>
+          <p>
+            이곳을 클릭하여 동네의 숨겨진 이야기와 유용한 꿀팁을 들려주세요.
+          </p>
         </div>
         <span class="arrow-icon" :class="{ open: isFormOpen }">▼</span>
       </div>
@@ -110,8 +140,8 @@ const goToDetail = (id) => {
           <div class="form-item">
             <label>카테고리</label>
             <div class="category-selector">
-              <button 
-                v-for="cat in ['잡담', '구인', '후기']" 
+              <button
+                v-for="cat in ['잡담', '구인', '후기']"
                 :key="cat"
                 type="button"
                 :class="['category-btn', { active: selectedCategory === cat }]"
@@ -124,56 +154,96 @@ const goToDetail = (id) => {
 
           <div class="form-item">
             <label>제목</label>
-            <input v-model="newTitle" type="text" placeholder="명소를 드러내는 멋진 제목을 작성해 주세요" />
+            <input
+              v-model="newTitle"
+              type="text"
+              placeholder="명소를 드러내는 멋진 제목을 작성해 주세요"
+            />
           </div>
 
           <div class="form-item">
             <label>지역 위치</label>
-            <input v-model="newLocation" type="text" placeholder="지역 이름 (예: 서울 마포구, 부산 해운대구)" />
+            <input
+              v-model="newLocation"
+              type="text"
+              placeholder="지역 이름 (예: 서울 마포구, 부산 해운대구)"
+            />
           </div>
 
           <div class="form-item">
             <label>이야기 본문</label>
-            <textarea v-model="newDesc" placeholder="이 명소와 관련된 꿀팁이나 생각을 자유롭게 들려주세요."></textarea>
+            <textarea
+              v-model="newDesc"
+              placeholder="이 명소와 관련된 꿀팁이나 생각을 자유롭게 들려주세요."
+            ></textarea>
           </div>
 
           <div class="form-item">
-            <label>비밀번호 설정 <span class="sub-label">(글 수정/삭제 시 필요합니다)</span></label>
-            <input v-model="newPassword" type="password" placeholder="비밀번호 4자리 입력" maxlength="8" />
+            <label
+              >비밀번호 설정
+              <span class="sub-label">(글 수정/삭제 시 필요합니다)</span></label
+            >
+            <input
+              v-model="newPassword"
+              type="password"
+              placeholder="비밀번호 4자리 입력"
+              maxlength="8"
+            />
           </div>
         </div>
 
-        <button class="btn-submit-airbnb" @click="addPost">이야기 등록하기</button>
+        <button class="btn-submit-airbnb" @click="addPost">
+          이야기 등록하기
+        </button>
       </div>
     </section>
 
     <section class="grid-section">
       <h2 class="section-title">지역에 대한 사람들의 생각을 확인해보세요 ✈️</h2>
-      
+
       <div class="grid-container">
-        <div v-for="post in posts" :key="post.id" class="post-card" @click="goToDetail(post.id)">
+        <div
+          v-for="post in posts"
+          :key="post.id"
+          class="post-card"
+          @click="goToDetail(post.id)"
+        >
           <div class="card-image-field">
             <span class="category-badge">{{ post.category }}</span>
             <span class="location-badge">{{ post.location }}</span>
           </div>
-          
+
           <div class="card-content">
             <h3 class="card-title">{{ post.title }}</h3>
             <p class="card-desc">{{ post.desc }}</p>
-            
+
             <div class="card-footer">
               <span class="likes">💛 {{ post.likes || 0 }}</span>
-              <button class="btn-delete-trigger" @click="requestDelete($event, post.id)">삭제</button>
+              <button
+                class="btn-delete-trigger"
+                @click="requestDelete($event, post.id)"
+              >
+                삭제
+              </button>
             </div>
 
-            <div v-if="activeDeleteId === post.id" class="delete-confirm-box" @click.stop>
-              <input 
-                v-model="deletePassword" 
-                type="password" 
-                placeholder="비밀번호 입력" 
+            <div
+              v-if="activeDeleteId === post.id"
+              class="delete-confirm-box"
+              @click.stop
+            >
+              <input
+                v-model="deletePassword"
+                type="password"
+                placeholder="비밀번호 입력"
                 @keyup.enter="confirmDelete($event, post.id)"
               />
-              <button class="btn-confirm" @click="confirmDelete($event, post.id)">확인</button>
+              <button
+                class="btn-confirm"
+                @click="confirmDelete($event, post.id)"
+              >
+                확인
+              </button>
             </div>
           </div>
         </div>
@@ -195,13 +265,13 @@ const goToDetail = (id) => {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-airbnb);
   overflow: hidden;
-  box-shadow: 0 6px 16px rgba(0,0,0,0.02);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.02);
   margin-bottom: 48px;
   transition: box-shadow 0.2s;
 }
 
 .write-accordion:hover {
-  box-shadow: 0 10px 24px rgba(0,0,0,0.05);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.05);
 }
 
 .accordion-header {
@@ -238,7 +308,7 @@ const goToDetail = (id) => {
 .accordion-content {
   padding: 0 30px 30px 30px;
   border-top: 1px solid var(--color-border);
-  background-color: #FCFCFC;
+  background-color: #fcfcfc;
 }
 
 .input-group {
@@ -271,7 +341,7 @@ const goToDetail = (id) => {
 .category-selector {
   display: flex;
   gap: 8px;
-  background-color: #EEEEEE;
+  background-color: #eeeeee;
   padding: 4px;
   border-radius: 10px;
   width: fit-content;
@@ -292,10 +362,11 @@ const goToDetail = (id) => {
 .category-btn.active {
   background-color: white;
   color: var(--color-airbnb-dark);
-  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
-.form-item input, .form-item textarea {
+.form-item input,
+.form-item textarea {
   border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 12px 14px;
@@ -305,7 +376,8 @@ const goToDetail = (id) => {
   transition: border-color 0.2s;
 }
 
-.form-item input:focus, .form-item textarea:focus {
+.form-item input:focus,
+.form-item textarea:focus {
   border-color: var(--color-airbnb-red);
 }
 
@@ -347,7 +419,10 @@ const goToDetail = (id) => {
 
 .grid-container {
   display: grid;
-  grid-template-columns: repeat(3, 1fr); /* 넓은 화면에서 한 줄에 무조건 3개씩 배치 */
+  grid-template-columns: repeat(
+    3,
+    1fr
+  ); /* 넓은 화면에서 한 줄에 무조건 3개씩 배치 */
   gap: 24px;
 }
 
@@ -369,7 +444,9 @@ const goToDetail = (id) => {
   border-radius: var(--radius-airbnb);
   overflow: hidden;
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -377,12 +454,12 @@ const goToDetail = (id) => {
 
 .post-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 24px rgba(0,0,0,0.06);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
 }
 
 .card-image-field {
   height: 160px;
-  background-color: #EBEBEB;
+  background-color: #ebebeb;
   position: relative;
   display: flex;
   align-items: flex-end;
