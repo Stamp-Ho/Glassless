@@ -49,8 +49,8 @@ const sendChat = async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         query: userText,
-        region: "",
-        category: "",
+        region: detectedRegion,
+        category: "관광",
       }),
     });
 
@@ -83,7 +83,7 @@ const sendChat = async () => {
 };
 
 const extractRegion = (text) => {
-  const regions = ["서울", "부산", "수영구", "해운대"];
+  const regions = ["서울", "부산", "수영구", "해운대", "대전", "구미", "광주"];
   for (const reg of regions) {
     if (text.includes(reg)) return reg;
   }
@@ -91,7 +91,7 @@ const extractRegion = (text) => {
 };
 
 // =========================================================================
-// [2] ☀️ 날씨(Weather) 관련 스크립트 영역
+// [2] ☀️ 날씨(Weather) 관련 스크립트 영역 (전국 5대 권역 확장)
 // =========================================================================
 const isWeatherOpen = ref(false);
 const isWeatherLoading = ref(false);
@@ -105,9 +105,11 @@ const WEATHER_BASE_URL = "https://api.openweathermap.org/data/2.5/weather";
 const selectedCity = ref("");
 const selectedDistrict = ref("");
 
+// 서울, 부산, 대전_충청, 구미_경북, 광주_전라 정밀 행정구역 정보 구축
 const regionsData = {
   seoul: {
     name: "서울특별시",
+    fallbackQuery: "Seoul",
     districts: [
       { eng: "Gangnam-gu", kor: "강남구" },
       { eng: "Gangdong-gu", kor: "강동구" },
@@ -138,6 +140,7 @@ const regionsData = {
   },
   busan: {
     name: "부산광역시",
+    fallbackQuery: "Busan",
     districts: [
       { eng: "Gangseo-gu,busan", kor: "강서구" },
       { eng: "Geumjeong-gu", kor: "금정구" },
@@ -155,6 +158,54 @@ const regionsData = {
       { eng: "Yeongdo-gu", kor: "영도구" },
       { eng: "Jung-gu,busan", kor: "중구" },
       { eng: "Haeundae", kor: "해운대구" },
+    ],
+  },
+  daejeon_chungcheong: {
+    name: "대전/충청권",
+    fallbackQuery: "Daejeon",
+    districts: [
+      { eng: "Dong-gu,daejeon", kor: "대전 동구" },
+      { eng: "Jung-gu,daejeon", kor: "대전 중구" },
+      { eng: "Seo-gu,daejeon", kor: "대전 서구" },
+      { eng: "Yuseong-gu", kor: "대전 유성구" },
+      { eng: "Daedeok-gu", kor: "대전 대덕구" },
+      { eng: "Cheongju", kor: "청주시" },
+      { eng: "Chungho", kor: "충주시" },
+      { eng: "Cheonan", kor: "천안시" },
+      { eng: "Asan", kor: "아산시" },
+    ],
+  },
+  gumi_gyeongbuk: {
+    name: "구미/경북권",
+    fallbackQuery: "Gumi",
+    districts: [
+      { eng: "Gumi", kor: "구미시" },
+      { eng: "Jung-gu,daegu", kor: "대구 중구" },
+      { eng: "Dong-gu,daegu", kor: "대구 동구" },
+      { eng: "Seo-gu,daegu", kor: "대구 서구" },
+      { eng: "Nam-gu,daegu", kor: "대구 남구" },
+      { eng: "Buk-gu,daegu", kor: "대구 북구" },
+      { eng: "Suseong-gu", kor: "대구 수성구" },
+      { eng: "Dalseo-gu", kor: "대구 달서구" },
+      { eng: "Pohang", kor: "포항시" },
+      { eng: "Gyeongju", kor: "경주시" },
+      { eng: "Andong", kor: "안동시" },
+    ],
+  },
+  gwangju_jeolla: {
+    name: "광주/전라권",
+    fallbackQuery: "Gwangju",
+    districts: [
+      { eng: "Dong-gu,gwangju", kor: "광주 동구" },
+      { eng: "Seo-gu,gwangju", kor: "광주 서구" },
+      { eng: "Nam-gu,gwangju", kor: "광주 남구" },
+      { eng: "Buk-gu,gwangju", kor: "광주 북구" },
+      { eng: "Gwangsan-gu", kor: "광주 광산구" },
+      { eng: "Jeonju", kor: "전주시" },
+      { eng: "Iksan", kor: "익산시" },
+      { eng: "Mokpo", kor: "목포시" },
+      { eng: "Yeosu", kor: "여수시" },
+      { eng: "Suncheon", kor: "순천시" },
     ],
   },
 };
@@ -239,8 +290,9 @@ const searchWeather = async () => {
     let response = await fetch(url);
     let isFallback = false;
 
+    // 세부 구 행정구역 날씨 404 시 거점 도시 대표 날씨로 폴백 전환 처리
     if (response.status === 404) {
-      const fallbackQuery = selectedCity.value === "seoul" ? "Seoul" : "Busan";
+      const fallbackQuery = currentCityData.fallbackQuery;
       url = `${WEATHER_BASE_URL}?q=${fallbackQuery}&appid=${WEATHER_API_KEY}&units=metric&lang=kr`;
       response = await fetch(url);
       isFallback = true;
@@ -295,6 +347,9 @@ const searchWeather = async () => {
     <CommonHeader />
     <router-view />
 
+    <!-- =================================================================== -->
+    <!-- [A] 플로팅 버튼 영역 -->
+    <!-- =================================================================== -->
     <button
       class="weather-floating-btn"
       @click="toggleWeather"
@@ -313,13 +368,16 @@ const searchWeather = async () => {
       <span v-else>✕</span>
     </button>
 
+    <!-- =================================================================== -->
+    <!-- [B] ☀️ 날씨(Weather) 모달 영역 -->
+    <!-- =================================================================== -->
     <div v-if="isWeatherOpen" class="weather-modal">
       <div class="weather-header">
         <div class="header-info">
           <span class="weather-icon-mini">📍</span>
           <div>
             <h3>로컬 실시간 날씨</h3>
-            <span class="sub-status">서울 / 부산 정밀 날씨 정보</span>
+            <span class="sub-status">전국 5대 권역 상세 날씨 정보</span>
           </div>
         </div>
         <button class="btn-close-modal" @click="isWeatherOpen = false">
@@ -334,9 +392,12 @@ const searchWeather = async () => {
             @change="handleCityChange"
             class="weather-select"
           >
-            <option value="" disabled selected>시/도 선택</option>
+            <option value="" disabled selected>권역 선택</option>
             <option value="seoul">서울특별시</option>
             <option value="busan">부산광역시</option>
+            <option value="daejeon_chungcheong">대전/충청권</option>
+            <option value="gumi_gyeongbuk">구미/경북권</option>
+            <option value="gwangju_jeolla">광주/전라권</option>
           </select>
 
           <select
@@ -344,7 +405,7 @@ const searchWeather = async () => {
             :disabled="!selectedCity"
             class="weather-select"
           >
-            <option value="" disabled selected>구 선택</option>
+            <option value="" disabled selected>구/지역 선택</option>
             <option
               v-for="dist in availableDistricts"
               :key="dist.eng"
@@ -417,12 +478,15 @@ const searchWeather = async () => {
 
           <div v-else class="weather-empty-state">
             <span>🗺️</span>
-            <p>상단의 시와 구를 선택해 주세요.</p>
+            <p>상단의 권역과 구/지역을 선택해 주세요.</p>
           </div>
         </div>
       </div>
     </div>
 
+    <!-- =================================================================== -->
+    <!-- [C] 💬 챗봇(Chatbot) 모달 영역 -->
+    <!-- =================================================================== -->
     <div v-if="isChatOpen" class="chatbot-modal">
       <div class="chatbot-header">
         <div class="header-info">
@@ -774,7 +838,7 @@ const searchWeather = async () => {
   cursor: not-allowed;
 }
 
-/* 🌟 [수정] 플로팅 버튼의 기본 z-index 레이어를 1000으로 정의 */
+/* 플로팅 버튼 레이어 */
 .weather-floating-btn {
   position: fixed;
   bottom: 104px;
@@ -834,7 +898,7 @@ const searchWeather = async () => {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
 
-/* 🌟 [수정] 데스크톱 모달창 레이어의 z-index를 버튼(1000)보다 높은 2000으로 파격 상향 */
+/* 모달창 레이어 (z-index 2000으로 버튼 가림 완벽 해결) */
 .weather-modal {
   position: fixed;
   bottom: 176px;
@@ -1049,7 +1113,7 @@ const searchWeather = async () => {
   opacity: 0.7;
 }
 
-/* 🌟 [수정] 모달창 우측 상단 X(닫기 및 뒤로가기) 버튼 스타일 명확화 */
+/* 닫기 버튼 */
 .btn-close-modal {
   background: none;
   border: none;
@@ -1239,7 +1303,7 @@ const searchWeather = async () => {
     z-index: 1000 !important;
   }
 
-  /* 모바일 환경 전체화면 확장 */
+  /* 모바일 전체화면 레이아웃 */
   .weather-modal,
   .chatbot-modal {
     position: fixed !important;
@@ -1251,7 +1315,7 @@ const searchWeather = async () => {
     height: 100% !important;
     border-radius: 0 !important;
     border: none !important;
-    z-index: 2500 !important; /* 플로팅 요소를 완벽하게 기저로 깔아버리는 초고순위 배치 */
+    z-index: 2500 !important;
   }
 }
 </style>
