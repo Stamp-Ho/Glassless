@@ -655,6 +655,7 @@ const goToDetail = (id) => {
             
             <div class="card-footer">
               <span class="view-detail-text">클릭하여 상세 보기</span>
+              <span class="comments-count" aria-hidden="true">💬 {{ post.comments_count ?? 0 }}</span>
             </div>
           </div>
         </div>
@@ -1161,6 +1162,12 @@ const goToDetail = (id) => {
 .post-stars .loc-star { color:#dcdcdc; font-size:0.95rem; }
 .post-stars .loc-star.filled { color:#FFD54A; }
 .post-card .rating-text { color: var(--color-airbnb-gray); font-size:0.85rem; }
+
+.comments-count {
+  margin-left: 12px;
+  color: var(--color-airbnb-gray);
+  font-weight: 600;
+}
 
 .card-image-field {
   height: 160px;
