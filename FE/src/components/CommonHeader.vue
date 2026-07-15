@@ -4,12 +4,24 @@ import { ref } from "vue";
 // 모바일 메뉴 열림/닫힘 상태 관리
 const isMenuOpen = ref(false);
 
+// Props 받기
+defineProps({
+  isDarkMode: Boolean,
+});
+
+// Emits 정의
+const emit = defineEmits(["toggle-theme"]);
+
 const toggleMenu = () => {
   isMenuOpen.value = !isMenuOpen.value;
 };
 
 const closeMenu = () => {
   isMenuOpen.value = false;
+};
+
+const handleThemeToggle = () => {
+  emit("toggle-theme");
 };
 </script>
 
@@ -38,6 +50,14 @@ const closeMenu = () => {
         <router-link to="/map" class="nav-item" active-class="active"
           >지도 검색</router-link
         >
+        <button 
+          class="theme-toggle-nav-btn" 
+          @click="handleThemeToggle"
+          :title="isDarkMode ? '라이트 모드' : '다크 모드'"
+        >
+          <span v-if="isDarkMode">☀️</span>
+          <span v-else>🌙</span>
+        </button>
       </nav>
 
       <button
@@ -80,6 +100,14 @@ const closeMenu = () => {
           @click="closeMenu"
           >지도 검색</router-link
         >
+        <button 
+          class="mobile-theme-toggle-btn" 
+          @click="handleThemeToggle"
+          :title="isDarkMode ? '라이트 모드' : '다크 모드'"
+        >
+          <span v-if="isDarkMode">☀️ 라이트 모드</span>
+          <span v-else>🌙 다크 모드</span>
+        </button>
       </nav>
     </div>
   </header>
@@ -149,6 +177,23 @@ const closeMenu = () => {
   width: 100%;
   height: 2px;
   background-color: var(--color-airbnb-red);
+}
+
+.theme-toggle-nav-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.2rem;
+  padding: 4px;
+  transition: transform 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 12px;
+}
+
+.theme-toggle-nav-btn:hover {
+  transform: scale(1.15);
 }
 
 .header-right-spacer {
@@ -232,6 +277,23 @@ const closeMenu = () => {
 .mobile-nav-item.active {
   color: var(--color-airbnb-red);
   font-weight: 700;
+}
+
+.mobile-theme-toggle-btn {
+  background: none;
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  color: var(--color-airbnb-gray);
+  transition: all 0.2s;
+}
+
+.mobile-theme-toggle-btn:hover {
+  color: var(--color-airbnb-dark);
 }
 
 /* 🚨 768px 이하 모바일 디바이스 반응형 분기점 */

@@ -1,6 +1,10 @@
 <script setup>
 import { ref, nextTick, computed, onMounted } from "vue";
+import { useRoute } from "vue-router";
 import CommonHeader from "./components/CommonHeader.vue";
+
+const route = useRoute();
+const isHomePage = computed(() => route.path === "/");
 
 // =========================================================================
 // [0] 🌓 다크 모드 (Dark Mode) 설정 및 상태 관리
@@ -47,7 +51,7 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const chatHistory = ref([
   {
     sender: "bot",
-    text: '안녕하세요! GlassLESS 로컬 가이드 봇입니다. 🗺️\n\n"부산 수영구", "제주 애월읍"처럼 구체적인 지역명과 함께 원하는 테마나 활동을 입력해주시면 더욱 정확하고 상세한 맞춤 정보를 안내해 드릴 수 있습니다!',
+    text: "안녕하세요! GlassLESS 로컬 가이드 봇입니다.🗺️\n\n서울, 부산 같은 지역명과 함께 관광지/문화시설/축제공연행사/여행코스/레포츠/숙박/쇼핑/음식점 키워드를 입력해주시면 더욱 정확하고 상세한 맞춤 정보를 안내해 드릴 수 있습니다!",
   },
 ]);
 
@@ -375,11 +379,15 @@ const searchWeather = async () => {
 
 <template>
   <div class="app-layout">
-    <CommonHeader />
+    <CommonHeader 
+      :isDarkMode="isDarkMode"
+      @toggle-theme="toggleTheme"
+    />
     <router-view />
 
-    <!-- ✨ 새로 추가된 왼쪽 아래 다크모드 플로팅 버튼 -->
+    <!-- ✨ 고정 다크모드 버튼 (홈페이지가 아닐 때만 표시) -->
     <button
+      v-if="!isHomePage"
       class="theme-toggle-btn"
       @click="toggleTheme"
       aria-label="다크 모드 토글"
@@ -388,8 +396,9 @@ const searchWeather = async () => {
       <span v-else>🌙</span>
     </button>
 
-    <!-- 우측 아래 기존 날씨 / 챗봇 버튼 (유지) -->
+    <!-- 우측 아래 기존 날씨 / 챗봇 버튼 (홈페이지가 아닐 때만 표시) -->
     <button
+      v-if="!isHomePage"
       class="weather-floating-btn"
       @click="toggleWeather"
       :class="{ active: isWeatherOpen }"
@@ -407,7 +416,7 @@ const searchWeather = async () => {
       <span v-else>✕</span>
     </button>
 
-    <div v-if="isWeatherOpen" class="weather-modal">
+    <div v-if="isWeatherOpen && !isHomePage" class="weather-modal">
       <div class="weather-header">
         <div class="header-info">
           <span class="weather-icon-mini">📍</span>
