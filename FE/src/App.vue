@@ -51,7 +51,7 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const chatHistory = ref([
   {
     sender: "bot",
-    text: "안녕하세요! GlassLESS 로컬 가이드 봇입니다.🗺️\n\n서울, 부산 같은 지역명과 함께 관광지/문화시설/축제공연행사/여행코스/레포츠/숙박/쇼핑/음식점 키워드를 입력해주시면 더욱 정확하고 상세한 맞춤 정보를 안내해 드릴 수 있습니다!",
+    text: "✨ 안녕하세요! GlassLESS 로컬 가이드 봇입니다. 🗺️\n\n'서울', '부산' 같은 [지역명]과 함께 아래의 [원하는 테마]를 입력해 주세요!\n더욱 정확하고 상세한 맞춤 정보를 안내해 드립니다.\n\n🏛️ 관광지 / 문화시설\n🎉 축제공연행사\n🏃‍♂️ 레포츠 / 여행코스\n🏨 숙박 / 쇼핑 / 음식점\n\n💬 예시: '부산 관광지 추천해 줘'",
   },
 ]);
 
@@ -379,10 +379,7 @@ const searchWeather = async () => {
 
 <template>
   <div class="app-layout">
-    <CommonHeader 
-      :isDarkMode="isDarkMode"
-      @toggle-theme="toggleTheme"
-    />
+    <CommonHeader :isDarkMode="isDarkMode" @toggle-theme="toggleTheme" />
     <router-view />
 
     <!-- ✨ 고정 다크모드 버튼 (홈페이지가 아닐 때만 표시) -->
