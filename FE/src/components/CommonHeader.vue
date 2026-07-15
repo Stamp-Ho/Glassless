@@ -50,8 +50,8 @@ const handleThemeToggle = () => {
         <router-link to="/map" class="nav-item" active-class="active"
           >지도 검색</router-link
         >
-        <button 
-          class="theme-toggle-nav-btn" 
+        <button
+          class="theme-toggle-nav-btn"
           @click="handleThemeToggle"
           :title="isDarkMode ? '라이트 모드' : '다크 모드'"
         >
@@ -100,8 +100,8 @@ const handleThemeToggle = () => {
           @click="closeMenu"
           >지도 검색</router-link
         >
-        <button 
-          class="mobile-theme-toggle-btn" 
+        <button
+          class="mobile-theme-toggle-btn"
           @click="handleThemeToggle"
           :title="isDarkMode ? '라이트 모드' : '다크 모드'"
         >
@@ -123,10 +123,9 @@ const handleThemeToggle = () => {
 }
 
 .header-container {
-  max-width: 1200px;
+  max-width: 100%;
   margin: 0 auto;
   display: flex;
-  justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
 }
@@ -138,6 +137,8 @@ const handleThemeToggle = () => {
   cursor: pointer;
   letter-spacing: -0.8px;
   z-index: 1001; /* 햄버거 메뉴보다 상위 배치 */
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .logo span {
@@ -147,7 +148,9 @@ const handleThemeToggle = () => {
 
 .nav-tabs {
   display: flex;
-  gap: 32px;
+  gap: 100px;
+  flex: 1;
+  justify-content: center;
 }
 
 .nav-item {
@@ -197,7 +200,7 @@ const handleThemeToggle = () => {
 }
 
 .header-right-spacer {
-  width: 120px;
+  display: none;
 }
 
 /* =========================================================================
@@ -214,6 +217,7 @@ const handleThemeToggle = () => {
   cursor: pointer;
   padding: 0;
   z-index: 1001;
+  margin-left: auto;
 }
 
 .hamburger-btn .bar {
@@ -296,13 +300,10 @@ const handleThemeToggle = () => {
   color: var(--color-airbnb-dark);
 }
 
-/* 🚨 768px 이하 모바일 디바이스 반응형 분기점 */
-@media (max-width: 768px) {
+/* 🚨 1200px 이하에서 글자 밀림 시 해버거 버튼으로 변경 */
+@media (max-width: 1200px) {
   .nav-tabs {
     display: none; /* 기존 데스크톱 메뉴 가리기 */
-  }
-  .header-right-spacer {
-    display: none;
   }
   .hamburger-btn {
     display: flex; /* 햄버거 토글 버튼 노출 */
