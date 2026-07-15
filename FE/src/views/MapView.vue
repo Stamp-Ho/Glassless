@@ -106,7 +106,10 @@ function normalizePlace(item) {
     lat: isValidCoord ? lat : null,
     lng: isValidCoord ? lng : null,
     kind,
-    categoryLabel
+    categoryLabel,
+    // rating fields from backend (be flexible with possible keys)
+    rating_avg: item.rating_avg ?? (item.rating && item.rating.avg) ?? item.rating_avg_value ?? null,
+    rating_count: item.rating_count ?? (item.rating && item.rating.count) ?? item.rating_count_value ?? 0,
   };
 }
 
@@ -248,32 +251,53 @@ function renderPlaces(force = false) {
         image: createMarkerImage(markerColorMap[place.kind] || '#2e86de'),
       });
 
-      // 마커 클릭 이벤트 리스너
-      window.kakao.maps.event.addListener(marker, 'click', () => {
+      // 마커 클릭 이벤트 리스너 - 클릭 시 서버에서 상세(평점) 정보를 가져와 InfoWindow를 표시
+      window.kakao.maps.event.addListener(marker, 'click', async () => {
         markers.forEach(m => m.setZIndex(0));
         marker.setZIndex(9999);
         if (infoWindow) infoWindow.close();
-        
-        const contentHtml = `
-          <div style="padding:14px; width:220px; box-sizing:border-box; font-family:sans-serif; white-space:normal; word-break:keep-all;">
-            <div 
-              style="font-size:15px; font-weight:bold; color:#1a73e8; cursor:pointer; text-decoration:underline; margin-bottom:8px; line-height:1.4;" 
-              onclick="window.goToPost('${place.contentId}')"
-            >
-              ${place.title}
-            </div>
-            <div style="font-size:12px; color:#555; line-height:1.5;">
-              ${place.address}
-            </div>
-          </div>
-        `;
-        
+
+        // show temporary loading info
         infoWindow = new window.kakao.maps.InfoWindow({ 
-          content: contentHtml,
+          content: `<div style="padding:14px; width:220px; box-sizing:border-box; font-family:sans-serif;">로딩 중...</div>`,
           zIndex: 10000 
         });
-        
         infoWindow.open(map.value, marker);
+
+        try {
+          const resp = await fetch(`${API_BASE_URL}/api/locations/${encodeURIComponent(place.contentId)}`);
+          let detail = null;
+          if (resp.ok) detail = await resp.json();
+          const avg = detail?.rating_avg ?? place.rating_avg ?? null;
+          const count = detail?.rating_count ?? place.rating_count ?? 0;
+
+          const starsHtml = (() => {
+            if (!avg) return '';
+            const rounded = Math.round(Number(avg));
+            let s = '';
+            for (let i = 1; i <= 5; i++) {
+              s += `<span style=\"color:${i<=rounded ? '#FFD54A' : '#dcdcdc'};font-size:14px;margin-right:2px;\">★</span>`;
+            }
+            return `<div style=\"margin:6px 0; display:flex; align-items:center; gap:6px;\">${s}<small style=\"color:#666; font-size:12px;\">${Number(avg).toFixed(1)} (${count})</small></div>`;
+          })();
+
+          const contentHtml = `
+            <div style="padding:14px; width:260px; box-sizing:border-box; font-family:sans-serif; white-space:normal; word-break:keep-all;">
+              <div 
+                style="font-size:15px; font-weight:bold; color:#1a73e8; cursor:pointer; text-decoration:underline; margin-bottom:8px; line-height:1.4;" 
+                onclick="window.goToPost('${place.contentId}')"
+              >
+                ${place.title}
+              </div>
+              <div style="font-size:12px; color:#555; line-height:1.5;">${place.address}</div>
+              ${starsHtml}
+            </div>
+          `;
+
+          infoWindow.setContent(contentHtml);
+        } catch (e) {
+          console.error('fetch location detail failed:', e);
+        }
       });
 
       markerById[place.id] = marker;
@@ -494,24 +518,46 @@ function focusPlace(place) {
 
   if (infoWindow) infoWindow.close();
   
-  const contentHtml = `
-    <div style="padding:14px; width:220px; box-sizing:border-box; font-family:sans-serif; white-space:normal; word-break:keep-all;">
-      <div 
-        style="font-size:15px; font-weight:bold; color:#1a73e8; cursor:pointer; text-decoration:underline; margin-bottom:8px; line-height:1.4;" 
-        onclick="window.goToPost('${place.contentId}')"
-      >
-        ${place.title}
-      </div>
-      <div style="font-size:12px; color:#555; line-height:1.5;">${place.address}</div>
-    </div>
-  `;
-  
-  // 🔥 3. 정보 박스(InfoWindow)도 최상단 설정
+  // show loading infoWindow while fetching details
   infoWindow = new window.kakao.maps.InfoWindow({ 
-    content: contentHtml,
+    content: `<div style="padding:14px; width:220px; box-sizing:border-box; font-family:sans-serif;">로딩 중...</div>`,
     zIndex: 10000
   });
   infoWindow.open(map.value, marker);
+
+  (async () => {
+    try {
+      const resp = await fetch(`${API_BASE_URL}/api/locations/${encodeURIComponent(place.contentId)}`);
+      const detail = resp.ok ? await resp.json() : null;
+      const avg = detail?.rating_avg ?? place.rating_avg ?? null;
+      const count = detail?.rating_count ?? place.rating_count ?? 0;
+      let starsSection = '';
+      if (avg) {
+        const rounded = Math.round(Number(avg));
+        let s = '';
+        for (let i = 1; i <= 5; i++) {
+          s += `<span style=\"color:${i<=rounded ? '#FFD54A' : '#dcdcdc'};font-size:14px;margin-right:2px;\">★</span>`;
+        }
+        starsSection = `<div style=\"margin:6px 0; display:flex; align-items:center; gap:6px;\">${s}<small style=\"color:#666; font-size:12px;\">${Number(avg).toFixed(1)} (${count})</small></div>`;
+      }
+
+      const contentHtml = `
+        <div style="padding:14px; width:260px; box-sizing:border-box; font-family:sans-serif; white-space:normal; word-break:keep-all;">
+          <div 
+            style="font-size:15px; font-weight:bold; color:#1a73e8; cursor:pointer; text-decoration:underline; margin-bottom:8px; line-height:1.4;" 
+            onclick="window.goToPost('${place.contentId}')"
+          >
+            ${place.title}
+          </div>
+          <div style="font-size:12px; color:#555; line-height:1.5;">${place.address}</div>
+          ${starsSection}
+        </div>
+      `;
+      infoWindow.setContent(contentHtml);
+    } catch (e) {
+      console.error('fetch detail for focusPlace failed', e);
+    }
+  })();
   
   window.setTimeout(() => { if (map.value) map.value.relayout(); }, 0);
 }
@@ -599,6 +645,12 @@ onMounted(() => {
             @click="focusPlace(place)"
           >
             <div class="item-title">{{ place.title }}</div>
+            <div class="item-rating">
+              <span class="loc-stars">
+                <span v-for="i in 5" :key="i" class="loc-star" :class="{ filled: i <= Math.round(place.rating_avg || 0) }">★</span>
+              </span>
+              <span class="rating-text">{{ place.rating_avg ? Number(place.rating_avg).toFixed(1) : '-' }} ({{ place.rating_count || 0 }})</span>
+            </div>
             <div class="item-category">{{ place.categoryLabel }}</div>
             <div class="item-address">{{ place.address }}</div>
           </li>
@@ -768,6 +820,12 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.item-rating { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.loc-stars { display:flex; gap:4px; }
+.loc-star { color: #dcdcdc; font-size:0.95rem; }
+.loc-star.filled { color: #FFD54A; }
+.rating-text { color: var(--color-airbnb-gray); font-size:0.8rem; }
 
 .empty-state {
   display: flex;

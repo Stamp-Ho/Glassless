@@ -31,6 +31,107 @@ const newLocationId = ref('');
 const newThumbnailUrl = ref('');
 const newPassword = ref('');
 const selectedNewLocation = ref(null);
+const rating = ref(0);
+const ratingErrorMessage = ref('');
+
+function setRating(n) {
+  rating.value = n;
+  // clear previous rating error message
+  ratingErrorMessage.value = '';
+}
+
+const CLIENT_ID_KEY = 'app_client_id_v1';
+const LOCATION_RATING_KEY_PREFIX = 'location_rating_';
+
+async function ensureClientId() {
+  let id = localStorage.getItem(CLIENT_ID_KEY);
+  if (id) return id;
+  // generate from IP + UA + time
+  let ip = 'unknown';
+  try {
+    const resp = await fetch('https://api.ipify.org?format=json');
+    if (resp.ok) {
+      const j = await resp.json();
+      ip = j.ip || ip;
+    }
+  } catch (e) {
+    // ignore
+  }
+  const ua = navigator.userAgent || 'ua-unknown';
+  // NOTE: do not include a timestamp per request; derive id from IP + User-Agent only
+  const base = `${ip}|${ua}`;
+  try {
+    const enc = new TextEncoder().encode(base);
+    const hashBuf = await crypto.subtle.digest('SHA-256', enc);
+    const hashArray = Array.from(new Uint8Array(hashBuf));
+    id = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch (e) {
+    id = `${ip}-${Math.random().toString(36).slice(2,10)}`;
+  }
+  localStorage.setItem(CLIENT_ID_KEY, id);
+  return id;
+}
+
+function hasSubmittedRating(locationId) {
+  try {
+    const key = LOCATION_RATING_KEY_PREFIX + locationId;
+    return !!localStorage.getItem(key);
+  } catch (e) { return false; }
+}
+
+function storeSubmittedRating(locationId, score) {
+  try {
+    const key = LOCATION_RATING_KEY_PREFIX + locationId;
+    const payload = { score, ts: Date.now() };
+    localStorage.setItem(key, JSON.stringify(payload));
+  } catch (e) { /* ignore */ }
+}
+
+async function submitRatingForLocation(locationId, score) {
+  if (!locationId) return;
+  // do NOT block submission client-side based on localStorage — always send to server
+
+  const clientId = await ensureClientId();
+  try {
+    const resp = await fetch(`${API_BASE_URL}/api/locations/${encodeURIComponent(locationId)}/ratings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ score, client_id: clientId }),
+    });
+    if (resp.status === 429) {
+      ratingErrorMessage.value = '해당 명소에 이미 별점을 남겼습니다';
+      showToast(ratingErrorMessage.value, 'error');
+      showRatingFailure(ratingErrorMessage.value);
+      return false;
+    }
+    if (!resp.ok) {
+      console.error('rating post failed', resp.status);
+      const msg = '별점 등록에 실패했습니다.';
+      showToast(msg, 'error');
+      showRatingFailure(msg);
+      return false;
+    }
+    // success: persist submission record locally
+    storeSubmittedRating(locationId, score);
+    showToast('별점이 등록되었습니다.', 'success');
+    // refresh details for selected locations if visible
+    try {
+      if (selectedNewLocation.value && String(selectedNewLocation.value.id) === String(locationId)) {
+        await fetchSelectedLocationInfo(locationId, 'create');
+      }
+      if (selectedFilterLocation.value && String(selectedFilterLocation.value.id) === String(locationId)) {
+        await fetchSelectedLocationInfo(locationId, 'filter');
+      }
+    } catch (e) {
+      // ignore
+    }
+    return true;
+  } catch (e) {
+    console.error('submitRatingForLocation error', e);
+    showToast('별점 등록에 실패했습니다.', 'error');
+    return false;
+  }
+}
 
 // 명소 검색 모달 상태
 const isLocationModalOpen = ref(false);
@@ -80,12 +181,36 @@ const fetchPosts = async () => {
   }
 };
 
-// [추가] 쿼리 파라미터에 location_id가 있을 때, 필터 명소 카드 정보를 동적으로 가져오는 함수
-const fetchSelectedLocationInfo = async (id) => {
+// Simple toast
+const toast = ref({ message: '', type: '', visible: false });
+function showToast(message, type = 'info', ms = 3000) {
+  toast.value = { message, type, visible: true };
+  setTimeout(() => {
+    toast.value.visible = false;
+  }, ms);
+}
+
+const ratingFailureModal = ref({ visible: false, message: '' });
+
+function showRatingFailure(message) {
+  ratingFailureModal.value = { visible: true, message };
+}
+
+function closeRatingFailure() {
+  ratingFailureModal.value = { visible: false, message: '' };
+}
+
+// [추가] 쿼리 파라미터에 location_id가 있을 때, 또는 선택된 명소의 상세 정보를 가져오는 함수
+const fetchSelectedLocationInfo = async (id, target = 'filter') => {
   try {
     const response = await fetch(`${API_BASE_URL}/api/locations/${id}`);
     if (response.ok) {
-      selectedFilterLocation.value = await response.json();
+      const data = await response.json();
+      if (target === 'create') {
+        selectedNewLocation.value = data;
+      } else {
+        selectedFilterLocation.value = data;
+      }
     }
   } catch (error) {
     console.error('명소 정보를 불러오지 못했습니다:', error);
@@ -108,7 +233,8 @@ const selectLocation = (location) => {
     newRegion.value = location.region;
     newLocationId.value = String(location.id);
     newThumbnailUrl.value = location.image_url || '';
-    selectedNewLocation.value = location;
+    // fetch full details for the selected new location so rating info is available
+    fetchSelectedLocationInfo(location.id, 'create');
   } else {
     filterRegion.value = location.region;
     filterLocationId.value = String(location.id);
@@ -263,6 +389,16 @@ const addPost = async () => {
   }
   try {
     isSubmitting.value = true;
+    // If this is a review ('후기') and user selected a location and set a rating,
+    // submit the rating first; if rating submission fails, abort post creation.
+    if (selectedCategory.value === '후기' && newLocationId.value && rating.value > 0) {
+      const ok = await submitRatingForLocation(String(newLocationId.value), rating.value);
+      if (!ok) {
+        // rating failed; submitRatingForLocation already shows modal/toast.
+        throw new Error('별점 등록 실패로 게시글 등록이 취소되었습니다.');
+      }
+    }
+
     const response = await fetch(`${API_BASE_URL}/api/posts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -359,7 +495,7 @@ const goToDetail = (id) => {
             <div v-if="selectedNewLocation" class="selected-location-card">
               <strong>{{ selectedNewLocation.name }}</strong>
               <span>{{ selectedNewLocation.region }} · {{ selectedNewLocation.category }}</span>
-              <small>{{ selectedNewLocation.address || '주소 정보 없음' }}</small>\
+              <small>{{ selectedNewLocation.address || '주소 정보 없음' }}</small>
               <a
                 class="location-link"
                 :href="buildKakaoMapLink(selectedNewLocation)"
@@ -367,9 +503,27 @@ const goToDetail = (id) => {
                 rel="noopener noreferrer"
               >
                 카카오지도로 이동
-              </a>\
+              </a>
             </div>
-            <p v-else class="sub-label">명소를 선택하지 않아도 게시글 등록이 가능합니다.</p>
+
+            <div v-if="selectedNewLocation && selectedCategory === '후기'" class="form-item rating-item">
+              <label>별점 남기기</label>
+              <div class="star-rating" role="radiogroup" aria-label="별점">
+                <span
+                  v-for="n in 5"
+                  :key="n"
+                  role="radio"
+                  :aria-checked="n <= rating"
+                  class="star"
+                  :class="{ filled: n <= rating }"
+                  @click="setRating(n)"
+                >
+                  ★
+                </span>
+              </div>
+              <div v-if="ratingErrorMessage" class="rating-error">{{ ratingErrorMessage }}</div>
+            </div>
+            <!-- <p v-else class="sub-label">명소를 선택하지 않아도 게시글 등록이 가능합니다.</p> -->
           </div>
 
           <div class="form-item">
@@ -430,10 +584,36 @@ const goToDetail = (id) => {
       <div v-if="selectedFilterLocation" class="selected-location-card filter-card">
         <strong>명소 조건: {{ selectedFilterLocation.name }}</strong>
         <span>{{ selectedFilterLocation.region }} · {{ selectedFilterLocation.category }}</span>
+        <div class="selected-rating" v-if="selectedFilterLocation.rating_avg || selectedFilterLocation.rating_count">
+          <span class="loc-stars-inline">
+            <span v-for="i in 5" :key="i" class="loc-star" :class="{ filled: i <= Math.round(selectedFilterLocation.rating_avg || 0) }">★</span>
+          </span>
+          <small class="rating-text">{{ selectedFilterLocation.rating_avg ? Number(selectedFilterLocation.rating_avg).toFixed(1) : '-' }} ({{ selectedFilterLocation.rating_count || 0 }})</small>
+        </div>
         <small>{{ selectedFilterLocation.address || '주소 정보 없음' }}</small>
         <a
           class="location-link"
           :href="buildKakaoMapLink(selectedFilterLocation)"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          카카오지도로 이동
+        </a>
+      </div>
+
+      <div v-if="selectedNewLocation" class="selected-location-card">
+        <strong>{{ selectedNewLocation.name }}</strong>
+        <span>{{ selectedNewLocation.region }} · {{ selectedNewLocation.category }}</span>
+        <div class="selected-rating" v-if="selectedNewLocation.rating_avg || selectedNewLocation.rating_count">
+          <span class="loc-stars-inline">
+            <span v-for="i in 5" :key="i" class="loc-star" :class="{ filled: i <= Math.round(selectedNewLocation.rating_avg || 0) }">★</span>
+          </span>
+          <small class="rating-text">{{ selectedNewLocation.rating_avg ? Number(selectedNewLocation.rating_avg).toFixed(1) : '-' }} ({{ selectedNewLocation.rating_count || 0 }})</small>
+        </div>
+        <small>{{ selectedNewLocation.address || '주소 정보 없음' }}</small>
+        <a
+          class="location-link"
+          :href="buildKakaoMapLink(selectedNewLocation)"
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -513,12 +693,30 @@ const goToDetail = (id) => {
             @click="selectLocation(location)"
           >
             <strong>{{ location.name }}</strong>
-            <span>{{ location.region }} · {{ location.category }}</span>
+            <div class="location-meta">
+              <span>{{ location.region }} · {{ location.category }}</span>
+              <div class="location-rating-inline">
+                <span class="loc-stars">
+                  <span v-for="i in 5" :key="i" class="loc-star" :class="{ filled: i <= Math.round(location.rating_avg || 0) }">★</span>
+                </span>
+                <small class="rating-text">{{ location.rating_avg ? Number(location.rating_avg).toFixed(1) : '-' }} ({{ location.rating_count || 0 }})</small>
+              </div>
+            </div>
             <small>{{ location.address || '주소 정보 없음' }}</small>
           </li>
         </ul>
       </div>
     </div>
+    <div v-if="ratingFailureModal.visible" class="modal-overlay" @click.self="closeRatingFailure">
+      <div class="modal">
+        <h3>별점 등록 실패</h3>
+        <p>{{ ratingFailureModal.message }}</p>
+        <div class="modal-actions" style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
+          <button class="btn-secondary" @click="closeRatingFailure">닫기</button>
+        </div>
+      </div>
+    </div>
+    <div v-if="toast.visible" :class="['toast', toast.type]">{{ toast.message }}</div>
   </div>
 </template>
 
@@ -715,6 +913,81 @@ const goToDetail = (id) => {
 .location-link:hover {
   text-decoration: underline;
 }
+
+.rating-item .star-rating {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.rating-item .star {
+  font-size: 1.6rem;
+  color: #dcdcdc;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.12s ease-in-out, transform 0.08s ease;
+}
+.rating-item .star:hover {
+  transform: scale(1.08);
+}
+.rating-item .star.filled {
+  color: #FFD54A; /* 밝은 노란색 */
+  text-shadow: 0 1px 0 rgba(0,0,0,0.1);
+}
+
+.rating-error {
+  margin-top: 6px;
+  color: #b42318;
+  font-size: 0.9rem;
+}
+
+.location-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.location-rating-inline { display:flex; align-items:center; gap:6px; }
+.loc-stars { display:flex; gap:4px; }
+.loc-star { color: #dcdcdc; font-size:1rem; }
+.loc-star.filled { color: #FFD54A; }
+.rating-text { color: var(--color-airbnb-gray); font-size:0.85rem; }
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.modal {
+  width: min(92vw, 420px);
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.2);
+}
+.modal h3 { margin: 0 0 8px; }
+.modal p { margin: 0; color: var(--color-airbnb-gray); }
+
+.loc-stars-inline { display:flex; gap:6px; margin-left:6px; align-items:center }
+.selected-rating { display:flex; align-items:center; gap:8px; margin-top:6px; }
+
+/* toast */
+.toast {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  padding: 12px 16px;
+  background: rgba(0,0,0,0.85);
+  color: white;
+  border-radius: 8px;
+  z-index: 9999;
+}
+.toast.success { background: #16a34a; }
+.toast.error { background: #b42318; }
 
 .location-link-row {
   margin-top: 6px;

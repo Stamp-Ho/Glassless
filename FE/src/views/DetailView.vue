@@ -34,7 +34,7 @@ const loadedLocations = ref([]);
 const editPassword = ref('');
 const deletePassword = ref('');
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://glassless-be.onrender.com';
 
 const buildListRouteTarget = () => {
   const locationIdText = String(route.query.location_id ?? '').trim();
@@ -373,6 +373,12 @@ onMounted(async () => {
         <template v-if="selectedEditLocation">
           <strong>{{ selectedEditLocation.name }}</strong>
           <span>{{ selectedEditLocation.region }} · {{ selectedEditLocation.category }}</span>
+          <div class="selected-rating" v-if="selectedEditLocation.rating_avg || selectedEditLocation.rating_count">
+            <span class="loc-stars-inline">
+              <span v-for="i in 5" :key="i" class="loc-star" :class="{ filled: i <= Math.round(selectedEditLocation.rating_avg || 0) }">★</span>
+            </span>
+            <small class="rating-text">{{ selectedEditLocation.rating_avg ? Number(selectedEditLocation.rating_avg).toFixed(1) : '-' }} ({{ selectedEditLocation.rating_count || 0 }})</small>
+          </div>
           <small>{{ selectedEditLocation.address || '주소 정보 없음' }}</small>
           <div class="location-link-row">
             <router-link class="location-link-btn" :to="buildLocationPostsRoute(selectedEditLocation)">
@@ -600,6 +606,12 @@ onMounted(async () => {
   color: var(--color-airbnb-gray);
   line-height: 1.4;
 }
+
+.loc-stars-inline { display:flex; gap:6px; margin-left:6px; align-items:center }
+.selected-rating { display:flex; align-items:center; gap:8px; margin-top:6px; }
+.loc-star { color: #dcdcdc; font-size:1rem; }
+.loc-star.filled { color: #FFD54A; }
+.rating-text { color: var(--color-airbnb-gray); font-size:0.85rem; }
 
 .detail-location-card {
   margin-top: 18px;
