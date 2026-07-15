@@ -289,7 +289,13 @@ async def chat(payload: ChatRequest, db: AsyncSession = Depends(get_db)) -> Chat
             break
 
     if not chosen_row:
-        return ChatResponse(answer="제공된 로컬 데이터만으로는 답할 수 없습니다.", references=[])
+        return ChatResponse(
+            answer="제공된 로컬 데이터만으로는 답할 수 없습니다.",
+            references=[],
+            extracted_region=region,
+            extracted_category=category,
+            extraction_source="openai",
+        )
 
     location_obj, rating_avg, rating_count = chosen_row
     answer = f"추천: {location_obj.name} — {location_obj.category} | 주소: {location_obj.address or '-'} | 별점: {float(rating_avg):.1f} ({int(rating_count)}개)"
@@ -301,4 +307,10 @@ async def chat(payload: ChatRequest, db: AsyncSession = Depends(get_db)) -> Chat
             address=location_obj.address,
         )
     ]
-    return ChatResponse(answer=answer, references=refs)
+    return ChatResponse(
+        answer=answer,
+        references=refs,
+        extracted_region=region,
+        extracted_category=category,
+        extraction_source="openai",
+    )
