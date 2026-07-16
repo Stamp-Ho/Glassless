@@ -719,7 +719,6 @@ const goToDetail = (id) => {
         </div>
       </div>
           <div class="pagination-controls" style="display:flex; justify-content:center; gap:12px; margin-top:16px;">
-            <button class="btn-secondary" :disabled="page<=1" @click="goToPage(page-1)">이전</button>
             <div class="page-indicator" style="display:flex; gap:8px; align-items:center;">
               <button class="btn-secondary" :disabled="page<=1" @click="goToPage(1)">처음</button>
               <button class="btn-secondary" :disabled="page<=1" @click="goToPage(page-1)">이전</button>
