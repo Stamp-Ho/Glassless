@@ -23,12 +23,20 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
+cors_allow_origins = settings.cors_origins_list
+cors_allow_credentials = True
+if settings.app_env and settings.app_env.lower() == 'dev':
+    # In dev, allow all origins for convenience (no credentials)
+    cors_allow_origins = ["*"]
+    cors_allow_credentials = False
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
-    allow_credentials=True,
+    allow_origins=cors_allow_origins,
+    allow_credentials=cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Total-Count", "X-Total-Pages", "X-Has-Next"],
 )
 
 

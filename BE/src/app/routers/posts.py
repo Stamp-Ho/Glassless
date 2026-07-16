@@ -56,6 +56,11 @@ async def list_posts(
 
     # expose total count for client-side pagination
     response.headers['X-Total-Count'] = str(total)
+    # expose total pages and whether there is a next page
+    total_pages = (total + per_page - 1) // per_page if per_page > 0 else 1
+    has_next = (offset + len(posts)) < total
+    response.headers['X-Total-Pages'] = str(total_pages)
+    response.headers['X-Has-Next'] = '1' if has_next else '0'
     return [
         PostListItem(
             id=post.id,
