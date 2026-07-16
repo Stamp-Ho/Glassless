@@ -25,6 +25,15 @@
   <body>
     <div id="app"></div>
 
+    <style>
+      /* Ensure the app root can grow to full height so map sizing works reliably */
+      html, body, #app {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
