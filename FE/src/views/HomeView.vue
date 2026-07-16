@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed, nextTick } from "vue";
+import { ref, shallowRef, onMounted, computed, nextTick, watch } from "vue";
 import Chart from "chart.js/auto"; // 자동 등록 방식
 import { useRouter } from "vue-router";
 
@@ -8,6 +8,156 @@ const previewPosts = ref([]);
 
 // .env 파일에 정의된 전역 환경 변수 가져오기
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+// Kakao map
+const KAKAO_APP_KEY = import.meta.env.VITE_KAKAO_APP_KEY || "";
+const mapContainer = ref(null);
+const map = shallowRef(null);
+let miniMarker = null;
+let miniMarkers = [];
+let miniInfoWindow = null;
+
+const CITY_CENTER = {
+  seoul: { lat: 37.5665, lng: 126.9780 },
+  busan: { lat: 35.1796, lng: 129.0756 },
+  daejeon_chungcheong: { lat: 36.3504, lng: 127.3845 },
+  gumi_gyeongbuk: { lat: 36.1195, lng: 128.3446 },
+  gwangju_jeolla: { lat: 35.1595, lng: 126.8526 },
+};
+
+function loadKakaoMapSdk() {
+  if (!KAKAO_APP_KEY || KAKAO_APP_KEY.includes('YOUR')) return;
+  if (window.kakao && window.kakao.maps) {
+    window.kakao.maps.load(() => initMiniMap());
+    return;
+  }
+  const script = document.createElement('script');
+  script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_APP_KEY}&autoload=false&libraries=services`;
+  script.async = true;
+  script.onload = () => {
+    if (window.kakao && window.kakao.maps) window.kakao.maps.load(() => initMiniMap());
+  };
+  document.head.appendChild(script);
+}
+
+function initMiniMap() {
+  const container = mapContainer.value;
+  if (!container) return;
+  const center = CITY_CENTER[selectedCity.value] || CITY_CENTER.seoul;
+  try {
+    map.value = new window.kakao.maps.Map(container, {
+      center: new window.kakao.maps.LatLng(center.lat, center.lng),
+      level: 8,
+      draggable: true,
+      scrollwheel: true,
+    });
+    // place a marker at center
+    const position = new window.kakao.maps.LatLng(center.lat, center.lng);
+    miniMarker = new window.kakao.maps.Marker({ position, map: map.value });
+    // fetch nearby places for initial center
+    fetchNearbyAndRenderMarkers(center.lat, center.lng);
+
+    // update markers when user clicks on map or finishes dragging
+    try {
+      window.kakao.maps.event.addListener(map.value, 'click', (mouseEvent) => {
+        const latlng = mouseEvent.latLng;
+        map.value.setCenter(latlng);
+        if (miniMarker) miniMarker.setMap(null);
+        miniMarker = new window.kakao.maps.Marker({ position: latlng, map: map.value });
+        fetchNearbyAndRenderMarkers(latlng.getLat(), latlng.getLng());
+      });
+
+      window.kakao.maps.event.addListener(map.value, 'dragend', () => {
+        const c = map.value.getCenter();
+        fetchNearbyAndRenderMarkers(c.getLat(), c.getLng());
+      });
+    } catch (e) {}
+  } catch (e) {
+    console.error('mini map init failed', e);
+  }
+}
+
+function updateMiniMapMarkerByQuery(query) {
+  if (!window.kakao || !window.kakao.maps || !window.kakao.maps.services) return;
+  const geocoder = new window.kakao.maps.services.Geocoder();
+  geocoder.addressSearch(query, (result, status) => {
+    if (status === window.kakao.maps.services.Status.OK && result && result[0]) {
+      const lat = Number(result[0].y);
+      const lng = Number(result[0].x);
+      if (!map.value) initMiniMap();
+      try {
+        const pos = new window.kakao.maps.LatLng(lat, lng);
+        map.value.setCenter(pos);
+        if (miniMarker) miniMarker.setMap(null);
+        miniMarker = new window.kakao.maps.Marker({ position: pos, map: map.value });
+        // fetch nearby after centering
+        fetchNearbyAndRenderMarkers(lat, lng);
+      } catch (e) {
+        console.error('update mini marker failed', e);
+      }
+    }
+  });
+}
+
+function clearMiniMarkers() {
+  miniMarkers.forEach(m => { try { m.setMap(null); } catch (e) {} });
+  miniMarkers = [];
+}
+
+function normalizeMiniPlace(item) {
+  const lat = Number(item.mapy);
+  const lng = Number(item.mapx);
+  const title = item.name || item.title || '장소';
+  return { id: item.id ? String(item.id) : `${lat}_${lng}`, title, lat, lng, address: item.address || '' };
+}
+
+async function fetchNearbyAndRenderMarkers(lat, lng) {
+  if (!BASE_URL) return;
+  try {
+    const params = new URLSearchParams();
+    params.set('mapx', String(lng));
+    params.set('mapy', String(lat));
+    params.set('radius_km', '5');
+    params.set('limit', '50');
+    const resp = await fetch(`${BASE_URL}/api/locations?${params.toString()}`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (!Array.isArray(data)) return;
+
+    const normalized = data
+      .map(normalizeMiniPlace)
+      .filter(p => p.lat && p.lng)
+      .slice(0, 10);
+
+    clearMiniMarkers();
+
+    normalized.forEach((p) => {
+      try {
+        const position = new window.kakao.maps.LatLng(p.lat, p.lng);
+        const marker = new window.kakao.maps.Marker({ position, map: map.value });
+        // simple InfoWindow: title (click -> posts), address
+        try {
+          window.kakao.maps.event.addListener(marker, 'click', () => {
+            try {
+              if (miniInfoWindow) miniInfoWindow.close();
+              const contentHtml = `
+                <div style="padding:14px; width:220px; box-sizing:border-box; font-family:sans-serif;">
+                  <div style="font-size:15px; font-weight:bold; color:#1a73e8; cursor:pointer; text-decoration:underline; margin-bottom:8px;" onclick="window.goToPost('${p.id}')">${p.title}</div>
+                  <div style="font-size:12px; color:#555; line-height:1.5;">${p.address}</div>
+                </div>
+              `;
+              miniInfoWindow = new window.kakao.maps.InfoWindow({ content: contentHtml, zIndex: 10000 });
+              miniInfoWindow.open(map.value, marker);
+            } catch (e) { console.error('mini infowindow error', e); }
+          });
+        } catch (e) {}
+        miniMarkers.push(marker);
+      } catch (e) {}
+    });
+  } catch (e) {
+    console.error('fetchNearbyAndRenderMarkers failed', e);
+  }
+}
 
 // =========================================================================
 // 날씨(Weather) 관련 상태 및 로직
@@ -313,6 +463,10 @@ const searchWeather = async () => {
       isFallback: isFallback,
       parentCityName: currentCityData.name,
     };
+    // update mini map to district (try district kor + city name)
+    try {
+      updateMiniMapMarkerByQuery(`${targetDistrict.kor} ${currentCityData.name}`);
+    } catch (e) {}
   } catch (error) {
     console.error(error);
     weatherResult.value = {
@@ -351,24 +505,36 @@ onMounted(async () => {
     await nextTick();
     searchWeather();
   }
+  // expose simple helper for InfoWindow links
+  window.goToPost = (contentId) => {
+    if (contentId) router.push(`/posts?location_id=${contentId}`);
+    else alert('이 장소와 연결된 게시물 정보가 없습니다.');
+  };
 
-  // 기존 초기화 함수 호출하시던 것과 함께 실행
-  fetchStats();
+  // initialize mini map
+  loadKakaoMapSdk();
 });
 
 // 게시물 상세 페이지로 이동
 const goToPostDetail = (postId) => {
   router.push(`/posts/${postId}`);
 };
+
+watch(selectedCity, (nv) => {
+  if (!map.value) return;
+  const center = CITY_CENTER[nv] || CITY_CENTER.seoul;
+  try { map.value.setCenter(new window.kakao.maps.LatLng(center.lat, center.lng)); } catch (e) {}
+});
 </script>
 
 <template>
   <main class="home-page">
     <section class="hero-map-section">
       <div class="map-preview">
-        <button class="btn-map-sm" @click="router.push('/map')">
-          📍 지도에서 찾기
-        </button>
+          <div ref="mapContainer" class="home-mini-map"></div>
+          <button class="btn-map-sm" @click="router.push('/map')">
+            📍 지도에서 찾기
+          </button>
       </div>
     </section>
 
@@ -633,11 +799,19 @@ const goToPostDetail = (postId) => {
   position: relative;
 }
 
+.home-mini-map {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  z-index: 1;
+}
+
 .btn-map-sm {
   position: absolute;
   top: 24px;
   left: 24px;
   background-color: var(--color-airbnb-dark);
+  z-index: 20;
   color: white;
   border: none;
   padding: 10px 18px;
