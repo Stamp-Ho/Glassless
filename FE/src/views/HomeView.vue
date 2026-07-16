@@ -513,6 +513,8 @@ onMounted(async () => {
 
   // initialize mini map
   loadKakaoMapSdk();
+  // 기존 초기화 함수 호출하시던 것과 함께 실행
+  fetchStats();
 });
 
 // 게시물 상세 페이지로 이동
@@ -619,7 +621,7 @@ watch(selectedCity, (nv) => {
           >
             <div class="card-image-container">
               <img
-                :src="post.thumbnail_url || '/images/og-thumbnail.jpg'"
+                :src="post.thumbnail_url || '/images/og-thumbnail.png'"
                 :alt="post.title"
                 class="card-image"
               />
