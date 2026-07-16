@@ -586,7 +586,7 @@ const goToDetail = (id) => {
       <h2 class="section-title">지역에 대한 사람들의 생각을 확인해보세요 ✈️</h2>
 
       <div class="filter-toolbar">
-        <select v-model="filterRegion" @change="fetchPosts">
+        <select v-model="filterRegion" @change="updateFilterRoute">
           <option value="">전체 권역</option>
           <option v-for="region in regionOptions" :key="region" :value="region">{{ region }}</option>
         </select>
@@ -609,7 +609,7 @@ const goToDetail = (id) => {
           명소 조건 해제
         </button>
 
-        <button type="button" class="btn-refresh" @click="fetchPosts">검색</button>
+        <button type="button" class="btn-refresh" @click="updateFilterRoute">검색</button>
       </div>
 
       <div v-if="selectedFilterLocation" class="selected-location-card filter-card">
