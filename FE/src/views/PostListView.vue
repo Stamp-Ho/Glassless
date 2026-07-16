@@ -10,7 +10,10 @@ const isLoading = ref(false);
 const isSubmitting = ref(false);
 const errorMessage = ref('');
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://glassless-be.onrender.com';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ? `${window.location.protocol}//${window.location.hostname}:8000`
+  : 'https://glassless-be.onrender.com'
+);
 
 const filterRegion = ref('');
 const filterCategory = ref('');
