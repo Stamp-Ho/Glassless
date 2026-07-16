@@ -11,15 +11,12 @@ DB_PATH="$DATA_DIR/localhub.db"
 
 mkdir -p "$DATA_DIR"
 
-if [ ! -f "$DB_PATH" ]; then
-  if [ -f "$SEED_DB_PATH" ]; then
-    cp "$SEED_DB_PATH" "$DB_PATH"
-    echo "Copied seed DB to $DB_PATH"
-  else
-    echo "No seed DB found at $SEED_DB_PATH; leaving empty DB to be created by app"
-  fi
+# Always copy seed DB on startup to ensure seed data is applied
+if [ -f "$SEED_DB_PATH" ]; then
+  cp -f "$SEED_DB_PATH" "$DB_PATH"
+  echo "Copied seed DB to $DB_PATH (overwritten)"
 else
-  echo "DB already exists at $DB_PATH"
+  echo "No seed DB found at $SEED_DB_PATH; leaving empty DB to be created by app"
 fi
 
 # Ensure permissions
