@@ -28,16 +28,6 @@
 - `description: str | None`
 - `address: str | None`
 
-### LocationRating
-
-- `id: int (PK)`
-- `location_id: int (FK -> locations.id)`
-- `score: int (1~5)`
-- `client_id: str`
-- `ip_address: str`
-- `user_agent: str`
-- `created_at`
-
 ## 3) 세션/엔진 예시 포인트
 
 - 엔진: `create_async_engine(DATABASE_URL, future=True)`
@@ -67,4 +57,3 @@ python -m scripts.migrate
 - 현재 데이터 폴더 기준 `서울`, `부산` 권역은 `음식점` JSON이 없어 해당 카테고리 응답이 비어 있을 수 있음
 - 서버 시작 시 `locations` 테이블이 비어 있으면 JSON 데이터를 자동 적재하도록 구성
 - 서버 시작 시 기존 `posts` 테이블에 `category`/`location_id` 컬럼이 없으면 SQLite `ALTER TABLE`로 보정
-- `location_ratings` 테이블은 별점 저장용으로 자동 생성

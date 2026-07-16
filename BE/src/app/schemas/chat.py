@@ -1,18 +1,10 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 
 class ChatRequest(BaseModel):
     query: str = Field(min_length=1, max_length=500)
     region: str | None = Field(default=None, max_length=50)
     category: str | None = Field(default=None, max_length=100)
-
-    @field_validator("region", "category", mode="before")
-    @classmethod
-    def _normalize_optional_text(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = value.strip()
-        return normalized or None
 
 
 class LocationRef(BaseModel):
