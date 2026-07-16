@@ -1,5 +1,5 @@
 <script setup>
-import { ref, shallowRef, computed, onMounted, watch } from 'vue';
+import { ref, shallowRef, computed, onMounted, watch, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router'; 
 
 const KAKAO_APP_KEY = import.meta.env.VITE_KAKAO_APP_KEY || '';
@@ -14,6 +14,9 @@ const selectedRegion = ref('서울');
 
 const mapContainer = ref(null);
 const map = shallowRef(null);
+const sidebarRef = ref(null);
+const listSectionRef = ref(null);
+const mainMapRef = ref(null);
 
 const places = ref([]);
 const resultCount = ref(0);
@@ -34,6 +37,10 @@ const routeCoords = ref({
 let markers = [];
 const markerById = {};
 let infoWindow = null;
+
+let resizeObserver = null;
+let windowResizeHandler = null;
+let lastMobileState = null;
 
 const MAX_VISIBLE_MARKERS = 150;
 const MAX_VISIBLE_LIST_ITEMS = 120;
@@ -322,13 +329,26 @@ function renderPlaces(force = false) {
 
 function initMap() {
   if (mapInitAttempted && map.value) return;
-  mapInitAttempted = true;
 
   const container = mapContainer.value;
-  if (!container) {
-    window.setTimeout(() => initMap(), 100);
+  // If container doesn't exist yet or has near-zero height, wait and observe for size changes.
+  if (!container || container.clientHeight < 50) {
+    if (typeof window !== 'undefined' && window.ResizeObserver && !resizeObserver && container) {
+      resizeObserver = new window.ResizeObserver((entries) => {
+        const entry = entries && entries[0];
+        const h = entry?.contentRect?.height || 0;
+        if (h > 50) {
+          if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null; }
+          initMap();
+        }
+      });
+      resizeObserver.observe(container);
+    }
+    window.setTimeout(() => initMap(), 150);
     return;
   }
+
+  mapInitAttempted = true;
 
   try {
     container.innerHTML = '';
@@ -630,12 +650,66 @@ onMounted(() => {
   };
 
   loadKakaoMapSdk();
+  // Responsive placement: move `mapContainer` into the sidebar on small screens
+  const isMobile = () => (typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
+
+  const placeMapContainer = () => {
+    const mc = mapContainer.value;
+    const sidebar = sidebarRef.value;
+    const listSec = listSectionRef.value;
+    const mainMap = mainMapRef.value;
+    if (!mc || !sidebar || !listSec || !mainMap) return;
+
+    const mobile = isMobile();
+    if (mobile === lastMobileState) return;
+    lastMobileState = mobile;
+
+    try {
+      if (mobile) {
+        // insert map container before the list section inside sidebar
+        sidebar.insertBefore(mc, listSec);
+      } else {
+        // move map container back into main viewport
+        mainMap.appendChild(mc);
+      }
+    } catch (e) {
+      // ignore DOM errors
+    }
+
+    // allow Kakao map to recalculate layout after move
+    window.setTimeout(() => {
+      try { if (map.value && map.value.relayout) map.value.relayout(); } catch (e) {}
+    }, 50);
+  };
+
+  // initial placement
+  placeMapContainer();
+
+  // debounce resize and re-place
+  let resizeTimer = null;
+  windowResizeHandler = () => {
+    if (resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => { placeMapContainer(); }, 120);
+  };
+  window.addEventListener('resize', windowResizeHandler);
+});
+
+onUnmounted(() => {
+  if (resizeObserver) {
+    try { resizeObserver.disconnect(); } catch (e) {}
+    resizeObserver = null;
+  }
+  try { if (map.value && map.value.relayout) map.value.relayout(); } catch (e) {}
+  if (windowResizeHandler) {
+    try { window.removeEventListener('resize', windowResizeHandler); } catch (e) {}
+    windowResizeHandler = null;
+  }
 });
 </script>
 
 <template>
   <div class="map-search-layout">
-    <aside class="search-sidebar">
+    <aside class="search-sidebar" ref="sidebarRef">
       <div class="sidebar-header">
         <h2>{{ selectedRegion }} 여행지<br>지도 검색</h2>
         <p>{{ status }}</p>
@@ -692,7 +766,7 @@ onMounted(() => {
         </button>
       </div>
 
-      <div class="list-section">
+      <div class="list-section" ref="listSectionRef">
         <div class="list-header">
           <h3>표시된 장소</h3>
           <span class="result-count">{{ resultCount }}개</span>
@@ -724,7 +798,7 @@ onMounted(() => {
       </div>
     </aside>
 
-    <main class="map-viewport">
+    <main class="map-viewport" ref="mainMapRef">
       <div ref="mapContainer" class="map-container"></div>
     </main>
   </div>
@@ -1037,6 +1111,7 @@ onMounted(() => {
 .map-container {
   width: 100%;
   height: 100%;
+  min-height: 320px;
 }
 
 @media (max-width: 768px) {

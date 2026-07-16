@@ -1,5 +1,6 @@
 <script setup>
-import { ref, onMounted, computed, nextTick } from "vue";
+import { ref, shallowRef, onMounted, computed, nextTick, watch } from "vue";
+import Chart from "chart.js/auto"; // 자동 등록 방식
 import { useRouter } from "vue-router";
 
 const router = useRouter();
@@ -7,6 +8,156 @@ const previewPosts = ref([]);
 
 // .env 파일에 정의된 전역 환경 변수 가져오기
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+// Kakao map
+const KAKAO_APP_KEY = import.meta.env.VITE_KAKAO_APP_KEY || "";
+const mapContainer = ref(null);
+const map = shallowRef(null);
+let miniMarker = null;
+let miniMarkers = [];
+let miniInfoWindow = null;
+
+const CITY_CENTER = {
+  seoul: { lat: 37.5665, lng: 126.9780 },
+  busan: { lat: 35.1796, lng: 129.0756 },
+  daejeon_chungcheong: { lat: 36.3504, lng: 127.3845 },
+  gumi_gyeongbuk: { lat: 36.1195, lng: 128.3446 },
+  gwangju_jeolla: { lat: 35.1595, lng: 126.8526 },
+};
+
+function loadKakaoMapSdk() {
+  if (!KAKAO_APP_KEY || KAKAO_APP_KEY.includes('YOUR')) return;
+  if (window.kakao && window.kakao.maps) {
+    window.kakao.maps.load(() => initMiniMap());
+    return;
+  }
+  const script = document.createElement('script');
+  script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_APP_KEY}&autoload=false&libraries=services`;
+  script.async = true;
+  script.onload = () => {
+    if (window.kakao && window.kakao.maps) window.kakao.maps.load(() => initMiniMap());
+  };
+  document.head.appendChild(script);
+}
+
+function initMiniMap() {
+  const container = mapContainer.value;
+  if (!container) return;
+  const center = CITY_CENTER[selectedCity.value] || CITY_CENTER.seoul;
+  try {
+    map.value = new window.kakao.maps.Map(container, {
+      center: new window.kakao.maps.LatLng(center.lat, center.lng),
+      level: 8,
+      draggable: true,
+      scrollwheel: true,
+    });
+    // place a marker at center
+    const position = new window.kakao.maps.LatLng(center.lat, center.lng);
+    miniMarker = new window.kakao.maps.Marker({ position, map: map.value });
+    // fetch nearby places for initial center
+    fetchNearbyAndRenderMarkers(center.lat, center.lng);
+
+    // update markers when user clicks on map or finishes dragging
+    try {
+      window.kakao.maps.event.addListener(map.value, 'click', (mouseEvent) => {
+        const latlng = mouseEvent.latLng;
+        map.value.setCenter(latlng);
+        if (miniMarker) miniMarker.setMap(null);
+        miniMarker = new window.kakao.maps.Marker({ position: latlng, map: map.value });
+        fetchNearbyAndRenderMarkers(latlng.getLat(), latlng.getLng());
+      });
+
+      window.kakao.maps.event.addListener(map.value, 'dragend', () => {
+        const c = map.value.getCenter();
+        fetchNearbyAndRenderMarkers(c.getLat(), c.getLng());
+      });
+    } catch (e) {}
+  } catch (e) {
+    console.error('mini map init failed', e);
+  }
+}
+
+function updateMiniMapMarkerByQuery(query) {
+  if (!window.kakao || !window.kakao.maps || !window.kakao.maps.services) return;
+  const geocoder = new window.kakao.maps.services.Geocoder();
+  geocoder.addressSearch(query, (result, status) => {
+    if (status === window.kakao.maps.services.Status.OK && result && result[0]) {
+      const lat = Number(result[0].y);
+      const lng = Number(result[0].x);
+      if (!map.value) initMiniMap();
+      try {
+        const pos = new window.kakao.maps.LatLng(lat, lng);
+        map.value.setCenter(pos);
+        if (miniMarker) miniMarker.setMap(null);
+        miniMarker = new window.kakao.maps.Marker({ position: pos, map: map.value });
+        // fetch nearby after centering
+        fetchNearbyAndRenderMarkers(lat, lng);
+      } catch (e) {
+        console.error('update mini marker failed', e);
+      }
+    }
+  });
+}
+
+function clearMiniMarkers() {
+  miniMarkers.forEach(m => { try { m.setMap(null); } catch (e) {} });
+  miniMarkers = [];
+}
+
+function normalizeMiniPlace(item) {
+  const lat = Number(item.mapy);
+  const lng = Number(item.mapx);
+  const title = item.name || item.title || '장소';
+  return { id: item.id ? String(item.id) : `${lat}_${lng}`, title, lat, lng, address: item.address || '' };
+}
+
+async function fetchNearbyAndRenderMarkers(lat, lng) {
+  if (!BASE_URL) return;
+  try {
+    const params = new URLSearchParams();
+    params.set('mapx', String(lng));
+    params.set('mapy', String(lat));
+    params.set('radius_km', '5');
+    params.set('limit', '50');
+    const resp = await fetch(`${BASE_URL}/api/locations?${params.toString()}`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (!Array.isArray(data)) return;
+
+    const normalized = data
+      .map(normalizeMiniPlace)
+      .filter(p => p.lat && p.lng)
+      .slice(0, 10);
+
+    clearMiniMarkers();
+
+    normalized.forEach((p) => {
+      try {
+        const position = new window.kakao.maps.LatLng(p.lat, p.lng);
+        const marker = new window.kakao.maps.Marker({ position, map: map.value });
+        // simple InfoWindow: title (click -> posts), address
+        try {
+          window.kakao.maps.event.addListener(marker, 'click', () => {
+            try {
+              if (miniInfoWindow) miniInfoWindow.close();
+              const contentHtml = `
+                <div style="padding:14px; width:220px; box-sizing:border-box; font-family:sans-serif;">
+                  <div style="font-size:15px; font-weight:bold; color:#1a73e8; cursor:pointer; text-decoration:underline; margin-bottom:8px;" onclick="window.goToPost('${p.id}')">${p.title}</div>
+                  <div style="font-size:12px; color:#555; line-height:1.5;">${p.address}</div>
+                </div>
+              `;
+              miniInfoWindow = new window.kakao.maps.InfoWindow({ content: contentHtml, zIndex: 10000 });
+              miniInfoWindow.open(map.value, marker);
+            } catch (e) { console.error('mini infowindow error', e); }
+          });
+        } catch (e) {}
+        miniMarkers.push(marker);
+      } catch (e) {}
+    });
+  } catch (e) {
+    console.error('fetchNearbyAndRenderMarkers failed', e);
+  }
+}
 
 // =========================================================================
 // 날씨(Weather) 관련 상태 및 로직
@@ -21,6 +172,96 @@ const WEATHER_BASE_URL = "https://api.openweathermap.org/data/2.5/weather";
 const selectedCity = ref("seoul");
 const selectedDistrict = ref("");
 
+// =========================================================================
+// [새로 추가] 지역별 통계 차트 로직
+// =========================================================================
+const chartRef = ref(null);
+const statsData = ref(null);
+const statsLoading = ref(false);
+const statsError = ref(false);
+let myChart = null; // 💡 차트 인스턴스 보관용 변수 추가
+// 1. ref 선언 (template의 ref와 정확히 일치해야 합니다)
+const regionChartRef = ref(null);
+const categoryChartRef = ref(null);
+
+const renderCharts = () => {
+  // 2. ref가 null인지 안전하게 체크
+  if (!regionChartRef.value || !categoryChartRef.value) {
+    console.error("Canvas ref가 아직 연결되지 않았습니다.");
+    return;
+  }
+
+  // 기존 차트 파괴 (메모리 누수 방지)
+  // chart.js 인스턴스 저장용 변수가 필요하면 상단에 let으로 선언하여 관리하세요
+
+  new Chart(regionChartRef.value, {
+    type: "doughnut",
+    data: {
+      labels: Object.keys(statsData.value),
+      datasets: [
+        {
+          data: Object.values(statsData.value).map((r) => r.total_posts),
+          backgroundColor: [
+            "#FF6384",
+            "#36A2EB",
+            "#FFCE56",
+            "#4BC0C0",
+            "#9966FF",
+          ],
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: { title: { display: true, text: "지역별 게시물 비율" } },
+    },
+  });
+
+  const categoryTotals = { 잡담: 0, 후기: 0, 질문: 0, 구인: 0 };
+  Object.values(statsData.value).forEach((region) => {
+    Object.keys(categoryTotals).forEach((cat) => {
+      categoryTotals[cat] += region.by_category[cat]?.posts || 0;
+    });
+  });
+
+  new Chart(categoryChartRef.value, {
+    type: "pie",
+    data: {
+      labels: Object.keys(categoryTotals),
+      datasets: [
+        {
+          data: Object.values(categoryTotals),
+          backgroundColor: ["#FF9F40", "#FFCD56", "#C9CBCF", "#4AC0C0"],
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: { title: { display: true, text: "전체 카테고리 비율" } },
+    },
+  });
+};
+
+const fetchStats = async () => {
+  statsLoading.value = true;
+  try {
+    const res = await fetch(`${BASE_URL}/api/stats/regions`);
+    const data = await res.json();
+    statsData.value = data.regions;
+
+    // 데이터 로드 완료 후 캔버스가 그려질 시간을 벌어줌
+    await nextTick();
+    renderCharts(); // 여기서 이제 renderCharts를 찾을 수 있음
+  } catch (e) {
+    console.error("데이터 로드 중 에러:", e);
+  } finally {
+    statsLoading.value = false;
+  }
+};
+// =========================================================================
+// 날씨
+// =========================================================================
+//const chartRef = ref(null);
 const regionsData = {
   seoul: {
     name: "서울특별시",
@@ -222,6 +463,10 @@ const searchWeather = async () => {
       isFallback: isFallback,
       parentCityName: currentCityData.name,
     };
+    // update mini map to district (try district kor + city name)
+    try {
+      updateMiniMapMarkerByQuery(`${targetDistrict.kor} ${currentCityData.name}`);
+    } catch (e) {}
   } catch (error) {
     console.error(error);
     weatherResult.value = {
@@ -260,21 +505,36 @@ onMounted(async () => {
     await nextTick();
     searchWeather();
   }
+  // expose simple helper for InfoWindow links
+  window.goToPost = (contentId) => {
+    if (contentId) router.push(`/posts?location_id=${contentId}`);
+    else alert('이 장소와 연결된 게시물 정보가 없습니다.');
+  };
+
+  // initialize mini map
+  loadKakaoMapSdk();
 });
 
 // 게시물 상세 페이지로 이동
 const goToPostDetail = (postId) => {
   router.push(`/posts/${postId}`);
 };
+
+watch(selectedCity, (nv) => {
+  if (!map.value) return;
+  const center = CITY_CENTER[nv] || CITY_CENTER.seoul;
+  try { map.value.setCenter(new window.kakao.maps.LatLng(center.lat, center.lng)); } catch (e) {}
+});
 </script>
 
 <template>
   <main class="home-page">
     <section class="hero-map-section">
       <div class="map-preview">
-        <button class="btn-map-sm" @click="router.push('/map')">
-          📍 지도에서 찾기
-        </button>
+          <div ref="mapContainer" class="home-mini-map"></div>
+          <button class="btn-map-sm" @click="router.push('/map')">
+            📍 지도에서 찾기
+          </button>
       </div>
     </section>
 
@@ -377,10 +637,143 @@ const goToPostDetail = (postId) => {
         </div>
       </div>
     </section>
+
+    <section class="stats-section">
+      <h2 class="section-title">게시물 통계 시각화</h2>
+
+      <div class="charts-wrapper" v-if="statsData">
+        <div class="chart-container">
+          <canvas ref="regionChartRef"></canvas>
+        </div>
+        <div class="chart-container">
+          <canvas ref="categoryChartRef"></canvas>
+        </div>
+      </div>
+
+      <div v-else-if="statsLoading" class="status-message">
+        데이터 불러오는 중...
+      </div>
+    </section>
   </main>
 </template>
-
 <style scoped>
+/* 섹션 전체 레이아웃 */
+.stats-section {
+  padding: 40px 20px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* 내부 요소를 가로 중앙 정렬 */
+}
+
+/* 두 차트를 감싸는 wrapper */
+.charts-wrapper {
+  display: flex;
+  flex-direction: row;
+  justify-content: center; /* 💡 핵심: 내부 요소들을 가로 중앙으로 정렬 */
+  align-items: center;
+  gap: 10px; /* 💡 그래프 사이의 좁은 간격 */
+  width: auto; /* 💡 컨텐츠 크기만큼만 너비 차지 */
+  margin: 0 auto; /* 💡 부모 요소 안에서 중앙 정렬 */
+}
+
+/* 차트 크기 조절 (조금 줄여서 더 밀착된 느낌 제공) */
+.chart-container {
+  width: 280px; /* 크기를 살짝 줄임 */
+  height: 280px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.section-title {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 768px) {
+  .charts-wrapper {
+    flex-wrap: wrap; /* 모바일에서는 세로로 쌓임 */
+    gap: 20px;
+  }
+}
+
+/* 반응형: 화면이 아주 좁을 때만 세로로 전환 */
+@media (max-width: 768px) {
+  .charts-wrapper {
+    flex-wrap: wrap; /* 모바일에서는 세로로 쌓임 */
+    gap: 10px;
+  }
+  .chart-container {
+    width: 280px;
+    height: 280px;
+  }
+}
+/* 4. 모바일 대응 */
+@media (max-width: 768px) {
+  .charts-wrapper {
+    gap: 20px; /* 모바일에서는 갭을 더 좁게 */
+  }
+  .chart-container {
+    width: 280px;
+    height: 280px;
+  }
+}
+
+.status-message {
+  text-align: center;
+  padding: 50px;
+}
+/* 화면이 매우 작을 때만 세로로 변경 (반응형) */
+@media (max-width: 768px) {
+  .charts-wrapper {
+    flex-wrap: wrap;
+  }
+}
+
+.status-message {
+  text-align: center;
+  padding: 50px;
+}
+.status-message {
+  text-align: center;
+  padding: 50px;
+}
+
+/* 로딩 및 에러 문구 중앙 배치 */
+.status-message {
+  text-align: center;
+  padding: 40px;
+  color: #767676;
+  font-weight: 500;
+}
+
+.chart-wrapper {
+  position: relative;
+  height: 300px;
+  width: 100%;
+  display: block;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.chart-container {
+  position: relative;
+  height: 300px; /* 차트 높이 설정 */
+  width: 100%;
+}
+
+.loading-state,
+.empty-state {
+  text-align: center;
+  padding: 40px;
+  color: #767676;
+}
 .home-page {
   padding-bottom: 80px;
 }
@@ -406,11 +799,19 @@ const goToPostDetail = (postId) => {
   position: relative;
 }
 
+.home-mini-map {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  z-index: 1;
+}
+
 .btn-map-sm {
   position: absolute;
   top: 24px;
   left: 24px;
   background-color: var(--color-airbnb-dark);
+  z-index: 20;
   color: white;
   border: none;
   padding: 10px 18px;
