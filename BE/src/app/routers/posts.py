@@ -98,14 +98,26 @@ async def _get_location(location_id: int | None, db: AsyncSession) -> Location |
 async def create_post(payload: PostCreate, db: AsyncSession = Depends(get_db)) -> Post:
     location = await _get_location(payload.location_id, db)
 
+    # robustly derive category string whether PostCategory enum or raw string
+    if isinstance(payload.category, PostCategory):
+        category_str = payload.category.value
+    else:
+        category_str = str(payload.category) if payload.category is not None else None
+
+    region_str = None
+    if location:
+        region_str = location.region
+    elif payload.region:
+        region_str = payload.region.strip() or None
+
     post = Post(
         title=payload.title.strip(),
         content=payload.content.strip(),
         password=payload.password,
-        category=payload.category.value,
+        category=category_str,
         location_id=payload.location_id,
         thumbnail_url=location.image_url if location else None,
-        region=location.region if location else (payload.region.strip() if payload.region else None),
+        region=region_str,
         rating_score=payload.rating if payload.rating is not None else None,
     )
     db.add(post)
@@ -133,7 +145,7 @@ async def update_post(
     if payload.content is not None:
         post.content = payload.content.strip()
     if payload.category is not None:
-        post.category = payload.category.value
+        post.category = payload.category.value if isinstance(payload.category, PostCategory) else str(payload.category)
     if "location_id" in payload.model_fields_set:
         if payload.location_id is None:
             post.location_id = None
