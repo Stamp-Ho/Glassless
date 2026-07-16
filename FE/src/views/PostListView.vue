@@ -1396,6 +1396,50 @@ const goToDetail = (id) => {
   font-size: 0.92rem;
 }
 
+/* Pagination styles */
+.pagination-controls {
+  display:flex;
+  justify-content:center;
+  gap:8px;
+  margin-top:20px;
+  align-items:center;
+}
+.pagination-controls .btn-secondary {
+  background: white;
+  border: 1px solid #ddd;
+  color: #333;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  min-width: 40px;
+  text-align: center;
+  transition: background 0.12s, transform 0.08s;
+}
+.pagination-controls .btn-secondary:hover:not(:disabled) {
+  background: #f3f4f6;
+  transform: translateY(-2px);
+}
+.pagination-controls .btn-secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.pagination-controls .active-page {
+  background: var(--color-airbnb-red);
+  color: white !important;
+  border-color: transparent;
+  box-shadow: 0 6px 18px rgba(143,13,47,0.12);
+}
+.pagination-controls .page-indicator {
+  font-weight: 700;
+  color: var(--color-airbnb-dark);
+  padding: 6px 8px;
+}
+
+@media (max-width: 700px) {
+  .pagination-controls { gap:6px; }
+  .pagination-controls .btn-secondary { padding:6px 8px; min-width:32px; }
+}
+
 .location-results {
   margin: 0;
   padding: 0;
