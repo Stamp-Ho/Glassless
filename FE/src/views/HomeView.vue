@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, computed, nextTick } from "vue";
+import Chart from "chart.js/auto"; // 자동 등록 방식
 import { useRouter } from "vue-router";
 
 const router = useRouter();
@@ -21,6 +22,96 @@ const WEATHER_BASE_URL = "https://api.openweathermap.org/data/2.5/weather";
 const selectedCity = ref("seoul");
 const selectedDistrict = ref("");
 
+// =========================================================================
+// [새로 추가] 지역별 통계 차트 로직
+// =========================================================================
+const chartRef = ref(null);
+const statsData = ref(null);
+const statsLoading = ref(false);
+const statsError = ref(false);
+let myChart = null; // 💡 차트 인스턴스 보관용 변수 추가
+// 1. ref 선언 (template의 ref와 정확히 일치해야 합니다)
+const regionChartRef = ref(null);
+const categoryChartRef = ref(null);
+
+const renderCharts = () => {
+  // 2. ref가 null인지 안전하게 체크
+  if (!regionChartRef.value || !categoryChartRef.value) {
+    console.error("Canvas ref가 아직 연결되지 않았습니다.");
+    return;
+  }
+
+  // 기존 차트 파괴 (메모리 누수 방지)
+  // chart.js 인스턴스 저장용 변수가 필요하면 상단에 let으로 선언하여 관리하세요
+
+  new Chart(regionChartRef.value, {
+    type: "doughnut",
+    data: {
+      labels: Object.keys(statsData.value),
+      datasets: [
+        {
+          data: Object.values(statsData.value).map((r) => r.total_posts),
+          backgroundColor: [
+            "#FF6384",
+            "#36A2EB",
+            "#FFCE56",
+            "#4BC0C0",
+            "#9966FF",
+          ],
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: { title: { display: true, text: "지역별 게시물 비율" } },
+    },
+  });
+
+  const categoryTotals = { 잡담: 0, 후기: 0, 질문: 0, 구인: 0 };
+  Object.values(statsData.value).forEach((region) => {
+    Object.keys(categoryTotals).forEach((cat) => {
+      categoryTotals[cat] += region.by_category[cat]?.posts || 0;
+    });
+  });
+
+  new Chart(categoryChartRef.value, {
+    type: "pie",
+    data: {
+      labels: Object.keys(categoryTotals),
+      datasets: [
+        {
+          data: Object.values(categoryTotals),
+          backgroundColor: ["#FF9F40", "#FFCD56", "#C9CBCF", "#4AC0C0"],
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: { title: { display: true, text: "전체 카테고리 비율" } },
+    },
+  });
+};
+
+const fetchStats = async () => {
+  statsLoading.value = true;
+  try {
+    const res = await fetch(`${BASE_URL}/api/stats/regions`);
+    const data = await res.json();
+    statsData.value = data.regions;
+
+    // 데이터 로드 완료 후 캔버스가 그려질 시간을 벌어줌
+    await nextTick();
+    renderCharts(); // 여기서 이제 renderCharts를 찾을 수 있음
+  } catch (e) {
+    console.error("데이터 로드 중 에러:", e);
+  } finally {
+    statsLoading.value = false;
+  }
+};
+// =========================================================================
+// 날씨
+// =========================================================================
+//const chartRef = ref(null);
 const regionsData = {
   seoul: {
     name: "서울특별시",
@@ -260,6 +351,9 @@ onMounted(async () => {
     await nextTick();
     searchWeather();
   }
+
+  // 기존 초기화 함수 호출하시던 것과 함께 실행
+  fetchStats();
 });
 
 // 게시물 상세 페이지로 이동
@@ -377,10 +471,143 @@ const goToPostDetail = (postId) => {
         </div>
       </div>
     </section>
+
+    <section class="stats-section">
+      <h2 class="section-title">게시물 통계 시각화</h2>
+
+      <div class="charts-wrapper" v-if="statsData">
+        <div class="chart-container">
+          <canvas ref="regionChartRef"></canvas>
+        </div>
+        <div class="chart-container">
+          <canvas ref="categoryChartRef"></canvas>
+        </div>
+      </div>
+
+      <div v-else-if="statsLoading" class="status-message">
+        데이터 불러오는 중...
+      </div>
+    </section>
   </main>
 </template>
-
 <style scoped>
+/* 섹션 전체 레이아웃 */
+.stats-section {
+  padding: 40px 20px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* 내부 요소를 가로 중앙 정렬 */
+}
+
+/* 두 차트를 감싸는 wrapper */
+.charts-wrapper {
+  display: flex;
+  flex-direction: row;
+  justify-content: center; /* 💡 핵심: 내부 요소들을 가로 중앙으로 정렬 */
+  align-items: center;
+  gap: 10px; /* 💡 그래프 사이의 좁은 간격 */
+  width: auto; /* 💡 컨텐츠 크기만큼만 너비 차지 */
+  margin: 0 auto; /* 💡 부모 요소 안에서 중앙 정렬 */
+}
+
+/* 차트 크기 조절 (조금 줄여서 더 밀착된 느낌 제공) */
+.chart-container {
+  width: 280px; /* 크기를 살짝 줄임 */
+  height: 280px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.section-title {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 768px) {
+  .charts-wrapper {
+    flex-wrap: wrap; /* 모바일에서는 세로로 쌓임 */
+    gap: 20px;
+  }
+}
+
+/* 반응형: 화면이 아주 좁을 때만 세로로 전환 */
+@media (max-width: 768px) {
+  .charts-wrapper {
+    flex-wrap: wrap; /* 모바일에서는 세로로 쌓임 */
+    gap: 10px;
+  }
+  .chart-container {
+    width: 280px;
+    height: 280px;
+  }
+}
+/* 4. 모바일 대응 */
+@media (max-width: 768px) {
+  .charts-wrapper {
+    gap: 20px; /* 모바일에서는 갭을 더 좁게 */
+  }
+  .chart-container {
+    width: 280px;
+    height: 280px;
+  }
+}
+
+.status-message {
+  text-align: center;
+  padding: 50px;
+}
+/* 화면이 매우 작을 때만 세로로 변경 (반응형) */
+@media (max-width: 768px) {
+  .charts-wrapper {
+    flex-wrap: wrap;
+  }
+}
+
+.status-message {
+  text-align: center;
+  padding: 50px;
+}
+.status-message {
+  text-align: center;
+  padding: 50px;
+}
+
+/* 로딩 및 에러 문구 중앙 배치 */
+.status-message {
+  text-align: center;
+  padding: 40px;
+  color: #767676;
+  font-weight: 500;
+}
+
+.chart-wrapper {
+  position: relative;
+  height: 300px;
+  width: 100%;
+  display: block;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.chart-container {
+  position: relative;
+  height: 300px; /* 차트 높이 설정 */
+  width: 100%;
+}
+
+.loading-state,
+.empty-state {
+  text-align: center;
+  padding: 40px;
+  color: #767676;
+}
 .home-page {
   padding-bottom: 80px;
 }
