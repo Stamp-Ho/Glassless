@@ -17,7 +17,10 @@ class PostCreate(BaseModel):
     password: str = Field(min_length=1, max_length=100)
     category: PostCategory
     location_id: int | None = Field(default=None, ge=1)
+    thumbnail_url: str | None = Field(default=None, max_length=1000)
     region: str | None = Field(default=None, max_length=100)
+    # optional rating (only meaningful when category == '후기')
+    rating: int | None = Field(default=None, ge=1, le=5)
 
 
 class PostUpdate(BaseModel):
@@ -26,6 +29,7 @@ class PostUpdate(BaseModel):
     password: str = Field(min_length=1, max_length=100)
     category: PostCategory | None = None
     location_id: int | None = Field(default=None, ge=1)
+    thumbnail_url: str | None = Field(default=None, max_length=1000)
 
 
 class PostDelete(BaseModel):
@@ -40,7 +44,10 @@ class PostResponse(BaseModel):
     content: str
     category: PostCategory
     location_id: int | None
+    thumbnail_url: str | None
     region: str | None
+    rating: int | None = None
+    comments_count: int = 0
     created_at: datetime
     updated_at: datetime
 
@@ -53,6 +60,9 @@ class PostListItem(BaseModel):
     content: str
     category: PostCategory
     location_id: int | None
+    thumbnail_url: str | None
     region: str | None
+    rating: int | None = None
+    comments_count: int = 0
     created_at: datetime
     updated_at: datetime

@@ -9,6 +9,7 @@ from app.core.database import init_db
 from app.routers.chat import router as chat_router
 from app.routers.locations import router as locations_router
 from app.routers.posts import router as posts_router
+from app.routers.comments import router as comments_router
 from scripts.migrate import seed_locations_if_empty
 
 
@@ -46,3 +47,4 @@ async def swagger_ui_html():
 app.include_router(posts_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(locations_router, prefix="/api")
+app.include_router(comments_router, prefix="/api")

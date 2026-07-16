@@ -1,141 +1,222 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 
-const searchQuery = ref('');
-const searchResult = ref(null);
+const router = useRouter();
+const previewPosts = ref([]);
 
-const handleSearch = () => {
-  if (!searchQuery.value) return;
-  // 임시 검색 결과 매칭 (추후 공공데이터 API 연동 영역)
-  searchResult.value = `${searchQuery.value}의 인기 명소: 🏞️ 하늘공원, 🏛️ 역사박물관, ☕ 분위기 좋은 카페 거리`;
+// .env 파일에 정의된 전역 환경 변수 가져오기 (https://glassless-be.onrender.com)
+const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+onMounted(async () => {
+  try {
+    // 1. 전체 게시물 목록 엔드포인트로 단일 요청 전송
+    const response = await fetch(`${BASE_URL}/api/posts`);
+
+    // 2. 422 Validation Error 발생 시 아무것도 출력 안 하도록 빈 배열 처리 후 종료
+    if (response.status === 422) {
+      previewPosts.value = [];
+      return;
+    }
+
+    if (!response.ok) {
+      throw new Error('네트워크 응답 불안정');
+    }
+
+    const allPosts = await response.json();
+
+    // 3. 받아온 배열 데이터가 유효하다면 상위 4개만 슬라이스(slice)하여 바인딩
+    if (Array.isArray(allPosts)) {
+      previewPosts.value = allPosts.slice(0, 4);
+    } else {
+      previewPosts.value = [];
+    }
+
+  } catch (error) {
+    // 통신 실패 혹은 예외 상황 시 화면에 에러를 노출하지 않고 조용히 빈 화면 처리
+    console.error("데이터 로드 실패 (422 처리 포함):", error);
+    previewPosts.value = [];
+  }
+});
+
+const goToPostList = () => {
+  router.push('/posts');
 };
 </script>
 
 <template>
-  <main class="main-hero">
-    <div class="hero-content">
-      <h1 class="hero-title">어디로 떠나시나요?</h1>
-      <p class="hero-subtitle">GlassLESS에서 공공데이터 기반 지역 명소 정보를 손쉽게 찾아보세요.</p>
-      
-      <div class="search-capsule">
-        <div class="search-input-field">
-          <label>여행지</label>
-          <input 
-            v-model="searchQuery" 
-            type="text" 
-            placeholder="목적지 검색 (예: 서울 마포구)" 
-            @keyup.enter="handleSearch"
-          />
-        </div>
-        <button class="search-action-btn" @click="handleSearch">
-          🔍 검색
+  <main class="home-page">
+    <section class="hero-map-section">
+      <div class="map-preview">
+        <button class="btn-map-sm" @click="router.push('/map')">
+          📍 지도에서 찾기
         </button>
       </div>
+    </section>
 
-      <div v-if="searchResult" class="search-result-box">
-        <h3>🔍 검색 결과</h3>
-        <p>{{ searchResult }}</p>
+    <section v-if="previewPosts.length > 0" class="preview-section">
+      <div class="section-header">
+        <h2 class="section-title">최신 추천 지역 정보</h2>
+        <span class="view-all" @click="goToPostList">모두 보기 &rarr;</span>
       </div>
-    </div>
+
+      <div class="slider-container no-scrollbar">
+        <div 
+          v-for="post in previewPosts" 
+          :key="post.id" 
+          class="preview-card"
+          @click="goToPostList"
+        >
+          <div class="card-image-placeholder">
+            <span class="badge">{{ post.region || '지역 정보 없음' }}</span>
+          </div>
+          <div class="card-info">
+            <h3 class="card-title">{{ post.title }}</h3>
+            <p class="card-desc">{{ post.content }}</p>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 </template>
 
 <style scoped>
-.main-hero {
-  min-height: calc(100vh - 80px);
-  background: linear-gradient(180deg, #FFF0F2 0%, #FFFFFF 100%);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 40px 24px;
+.home-page {
+  padding-bottom: 80px;
 }
 
-.hero-content {
-  text-align: center;
-  max-width: 800px;
+.hero-map-section {
   width: 100%;
+  height: 320px;
+  background-color: #E3ECE9;
+  position: relative;
+  overflow: hidden;
 }
 
-.hero-title {
-  font-size: 3rem;
-  font-weight: 800;
-  color: var(--color-airbnb-dark);
-  margin-bottom: 12px;
-  letter-spacing: -1.5px;
-}
-
-.hero-subtitle {
-  font-size: 1.2rem;
-  color: var(--color-airbnb-gray);
-  margin-bottom: 40px;
-}
-
-/* 에어비앤비 검색 캡슐 */
-.search-capsule {
-  display: flex;
-  align-items: center;
-  background-color: white;
-  border: 1px solid var(--color-border);
-  border-radius: 40px;
-  padding: 10px 10px 10px 32px;
-  box-shadow: 0 16px 32px rgba(0,0,0,0.08);
-  max-width: 600px;
-  margin: 0 auto;
-}
-
-.search-input-field {
-  flex: 1;
-  text-align: left;
-}
-
-.search-input-field label {
-  display: block;
-  font-size: 0.75rem;
-  font-weight: 800;
-  color: var(--color-airbnb-dark);
-  text-transform: uppercase;
-  margin-bottom: 2px;
-}
-
-.search-input-field input {
-  border: none;
-  outline: none;
+.map-preview {
   width: 100%;
-  font-size: 0.95rem;
-  color: var(--color-airbnb-dark);
+  height: 100%;
+  background-image: radial-gradient(circle, #CFDDD8 10%, transparent 10.5%), radial-gradient(circle, #CFDDD8 10%, transparent 10.5%);
+  background-size: 20px 20px;
+  background-position: 0 0, 10px 10px;
+  position: relative;
 }
 
-.search-action-btn {
-  background-color: var(--color-airbnb-red);
+.btn-map-sm {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  background-color: var(--color-airbnb-dark);
   color: white;
   border: none;
-  border-radius: 24px;
-  padding: 12px 24px;
-  font-weight: 700;
-  font-size: 0.95rem;
+  padding: 10px 18px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 8px;
   cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  transition: transform 0.2s, background-color 0.2s;
+}
+
+.btn-map-sm:hover {
+  background-color: #000000;
+  transform: translateY(-1px);
+}
+
+.preview-section {
+  max-width: 1200px;
+  margin: 40px auto 0;
+  padding: 0 24px;
+}
+
+.section-header {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 20px;
 }
 
-.search-action-btn:hover {
-  filter: brightness(0.9);
+.section-title {
+  font-size: 1.35rem;
+  font-weight: 700;
 }
 
-.search-result-box {
-  margin-top: 40px;
-  padding: 24px;
+.view-all {
+  color: var(--color-airbnb-red);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.slider-container {
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+  scroll-behavior: smooth;
+  snap-type: x mandatory;
+}
+
+.preview-card {
+  flex: 0 0 calc(25% - 15px);
+  min-width: 260px;
   background-color: white;
-  border-radius: 16px;
   border: 1px solid var(--color-border);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.03);
-  text-align: left;
+  border-radius: var(--radius-airbnb);
+  overflow: hidden;
+  cursor: pointer;
+  snap-align: start;
+  transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.search-result-box h3 {
-  font-size: 1.1rem;
-  margin-bottom: 8px;
-  color: var(--color-airbnb-dark);
+@media (max-width: 1100px) {
+  .preview-card {
+    flex: 0 0 280px;
+  }
+}
+
+.preview-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0,0,0,0.06);
+}
+
+.card-image-placeholder {
+  height: 150px;
+  background-color: #EBEBEB;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  padding: 12px;
+}
+
+.badge {
+  background-color: white;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.card-info {
+  padding: 16px;
+}
+
+.card-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-desc {
+  font-size: 0.85rem;
+  color: var(--color-airbnb-gray);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 </style>
