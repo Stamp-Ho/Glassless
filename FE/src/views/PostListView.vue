@@ -10,13 +10,18 @@ const isLoading = ref(false);
 const isSubmitting = ref(false);
 const errorMessage = ref("");
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "https://glassless-be.onrender.com";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ? `${window.location.protocol}//${window.location.hostname}:8000`
+  : 'https://glassless-be.onrender.com'
+);
 
 const filterRegion = ref("");
 const filterCategory = ref("");
 const filterLocationId = ref("");
 const selectedFilterLocation = ref(null);
+const page = ref(Number(route.query.page || 1));
+const perPage = ref(12);
+const totalCount = ref(0);
 
 const regionOptions = [
   "서울",
@@ -174,10 +179,11 @@ const isLocationLoading = ref(false);
 // [변경] 현재 쿼리 파라미터를 기반으로 백엔드 API URL 생성
 const buildPostsUrl = () => {
   const params = new URLSearchParams();
-  if (route.query.region) params.set("region", route.query.region);
-  if (route.query.category) params.set("category", route.query.category);
-  if (route.query.location_id)
-    params.set("location_id", route.query.location_id);
+  if (route.query.region) params.set('region', route.query.region);
+  if (route.query.category) params.set('category', route.query.category);
+  if (route.query.location_id) params.set('location_id', route.query.location_id);
+  params.set('page', String(page.value || 1));
+  params.set('per_page', String(perPage.value));
   const url = `${API_BASE_URL}/api/posts?${params.toString()}`;
   console.debug("Fetching posts URL:", url);
   return url;
@@ -202,7 +208,24 @@ const fetchPosts = async () => {
     if (!response.ok) {
       throw new Error("게시글 목록을 불러오지 못했습니다.");
     }
-    posts.value = await response.json();
+    const data = await response.json();
+    posts.value = Array.isArray(data) ? data : [];
+    const total = response.headers.get('X-Total-Count');
+    totalCount.value = total ? Number(total) : 0;
+    // prefer server-provided total pages/has-next when available
+    const tp = response.headers.get('X-Total-Pages');
+    const hasNext = response.headers.get('X-Has-Next');
+    if (tp) {
+      totalPages.value = Number(tp) || Math.max(1, Math.ceil((totalCount.value || 0) / perPage.value));
+    } else {
+      totalPages.value = Math.max(1, Math.ceil((totalCount.value || 0) / perPage.value));
+    }
+    // store hasNext for disabling next button; fallback to page comparison
+    if (hasNext !== null) {
+      hasNextFlag.value = hasNext === '1';
+    } else {
+      hasNextFlag.value = page.value < totalPages.value;
+    }
   } catch (error) {
     console.error(error);
     errorMessage.value =
@@ -293,9 +316,10 @@ const clearSelectedLocation = (scope) => {
 watch(
   () => route.query,
   async (newQuery) => {
-    filterRegion.value = newQuery.region || "";
-    filterCategory.value = newQuery.category || "";
-    filterLocationId.value = newQuery.location_id || "";
+    filterRegion.value = newQuery.region || '';
+    filterCategory.value = newQuery.category || '';
+    filterLocationId.value = newQuery.location_id || '';
+    page.value = Number(newQuery.page || 1);
 
     // URL에 location_id는 있는데 상세 정보 오브젝트가 매핑되어 있지 않다면 백엔드에서 조회
     if (
@@ -316,14 +340,46 @@ watch(
 
 // [변경] 온마운트 시점에는 현재 주소창의 쿼리를 먼저 메모리에 대입한 뒤 데이터 페칭 수행
 onMounted(async () => {
-  filterRegion.value = route.query.region || "";
-  filterCategory.value = route.query.category || "";
-  filterLocationId.value = route.query.location_id || "";
+  filterRegion.value = route.query.region || '';
+  filterCategory.value = route.query.category || '';
+  filterLocationId.value = route.query.location_id || '';
+  page.value = Number(route.query.page || 1);
 
   if (filterLocationId.value) {
     await fetchSelectedLocationInfo(filterLocationId.value);
   }
   await fetchPosts();
+});
+
+const totalPages = ref(Math.max(1, Math.ceil((totalCount.value || 0) / perPage.value)));
+const hasNextFlag = ref(false);
+
+const goToPage = (p) => {
+  const tp = Number(totalPages.value) || 1;
+  if (p < 1) p = 1;
+  if (p > tp) p = tp;
+  if (p === page.value) return;
+  page.value = p;
+  // update route query
+  const q = { ...route.query, page: String(page.value) };
+  router.push({ path: route.path, query: q });
+};
+
+const pageWindow = computed(() => {
+  const tp = Number(totalPages.value) || 1;
+  const cur = Number(page.value) || 1;
+  const span = 2; // show cur +/- span
+  let start = Math.max(1, cur - span);
+  let end = Math.min(tp, cur + span);
+  // expand window if near edges
+  while (end - start < span * 2 && (end < tp || start > 1)) {
+    if (start > 1) start = Math.max(1, start - 1);
+    if (end < tp) end = Math.min(tp, end + 1);
+    if (start === 1 && end === tp) break;
+  }
+  const pages = [];
+  for (let i = start; i <= end; i++) pages.push(i);
+  return pages;
 });
 
 // 이하 기존 코드와 동일 (기타 비즈니스 로직 유지)
@@ -647,14 +703,14 @@ const goToDetail = (id) => {
       <h2 class="section-title">지역에 대한 사람들의 생각을 확인해보세요 ✈️</h2>
 
       <div class="filter-toolbar">
-        <select v-model="filterRegion" @change="fetchPosts">
+        <select v-model="filterRegion" @change="updateFilterRoute">
           <option value="">전체 권역</option>
           <option v-for="region in regionOptions" :key="region" :value="region">
             {{ region }}
           </option>
         </select>
 
-        <select v-model="filterCategory" @change="fetchPosts">
+        <select v-model="filterCategory" @change="updateFilterRoute">
           <option value="">전체 카테고리</option>
           <option v-for="cat in categoryOptions" :key="cat" :value="cat">
             {{ cat }}
@@ -678,9 +734,7 @@ const goToDetail = (id) => {
           명소 조건 해제
         </button>
 
-        <button type="button" class="btn-refresh" @click="fetchPosts">
-          검색
-        </button>
+        <button type="button" class="btn-refresh" @click="updateFilterRoute">검색</button>
       </div>
 
       <div
@@ -775,26 +829,15 @@ const goToDetail = (id) => {
 
       <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
       <p v-if="isLoading" class="state-text">게시글을 불러오는 중입니다...</p>
-      <p v-else-if="posts.length === 0" class="state-text">
-        조건에 맞는 게시글이 없습니다.
-      </p>
-
-      <div class="grid-container">
-        <div
-          v-for="post in posts"
-          :key="post.id"
-          class="post-card"
-          @click="goToDetail(post.id)"
-        >
-          <div
-            class="card-image-field"
-            :class="{ 'with-thumb': !!post.thumbnail_url }"
-            :style="
-              post.thumbnail_url
-                ? { backgroundImage: `url(${post.thumbnail_url})` }
-                : {}
-            "
-          >
+      <p v-else-if="posts.length === 0" class="state-text">조건에 맞는 게시글이 없습니다.</p>
+      
+        <div class="grid-container">
+          <div v-for="post in posts" :key="post.id" class="post-card" @click="goToDetail(post.id)">
+            <div
+              class="card-image-field"
+              :class="{ 'with-thumb': !!post.thumbnail_url }"
+              :style="post.thumbnail_url ? { backgroundImage: `url(${post.thumbnail_url})` } : {}"
+            >
             <span class="category-badge">{{ post.category }}</span>
             <span class="location-badge">{{
               post.region || "지역 미지정"
@@ -831,6 +874,25 @@ const goToDetail = (id) => {
           </div>
         </div>
       </div>
+          <div class="pagination-controls" style="display:flex; justify-content:center; gap:12px; margin-top:16px;">
+            <div class="page-indicator" style="display:flex; gap:8px; align-items:center;">
+              <button class="btn-secondary" :disabled="page<=1" @click="goToPage(1)">처음</button>
+              <button class="btn-secondary" :disabled="page<=1" @click="goToPage(page-1)">이전</button>
+              <div style="display:flex; gap:6px;">
+                <button
+                  v-for="p in pageWindow"
+                  :key="p"
+                  :class="['btn-secondary', { 'active-page': p === page } ]"
+                  @click="goToPage(p)"
+                  :disabled="p===page"
+                >
+                  {{ p }}
+                </button>
+              </div>
+              <button class="btn-secondary" :disabled="!hasNextFlag" @click="goToPage(page+1)">다음</button>
+              <button class="btn-secondary" :disabled="page>=totalPages" @click="goToPage(Number(totalPages))">끝</button>
+            </div>
+          </div>
     </section>
 
     <div
@@ -1611,6 +1673,50 @@ const goToDetail = (id) => {
   border-radius: 8px;
   padding: 10px 12px;
   font-size: 0.92rem;
+}
+
+/* Pagination styles */
+.pagination-controls {
+  display:flex;
+  justify-content:center;
+  gap:8px;
+  margin-top:20px;
+  align-items:center;
+}
+.pagination-controls .btn-secondary {
+  background: white;
+  border: 1px solid #ddd;
+  color: #333;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  min-width: 40px;
+  text-align: center;
+  transition: background 0.12s, transform 0.08s;
+}
+.pagination-controls .btn-secondary:hover:not(:disabled) {
+  background: #f3f4f6;
+  transform: translateY(-2px);
+}
+.pagination-controls .btn-secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.pagination-controls .active-page {
+  background: var(--color-airbnb-red);
+  color: white !important;
+  border-color: transparent;
+  box-shadow: 0 6px 18px rgba(143,13,47,0.12);
+}
+.pagination-controls .page-indicator {
+  font-weight: 700;
+  color: var(--color-airbnb-dark);
+  padding: 6px 8px;
+}
+
+@media (max-width: 700px) {
+  .pagination-controls { gap:6px; }
+  .pagination-controls .btn-secondary { padding:6px 8px; min-width:32px; }
 }
 
 .location-results {

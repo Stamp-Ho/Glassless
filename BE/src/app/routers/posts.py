@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
+from sqlalchemy import func
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,9 +13,12 @@ router = APIRouter(prefix="/posts", tags=["posts"])
 
 @router.get("", response_model=list[PostListItem])
 async def list_posts(
+    response: Response,
     region: str | None = None,
     category: PostCategory | None = None,
     location_id: int | None = None,
+    page: int = 1,
+    per_page: int = 20,
     db: AsyncSession = Depends(get_db),
 ) -> list[PostListItem]:
     query = select(Post)
@@ -26,8 +30,37 @@ async def list_posts(
         query = query.where(Post.location_id == location_id)
     query = query.order_by(desc(Post.created_at))
 
+    # sanitize paging
+    if page < 1:
+        page = 1
+    if per_page < 1:
+        per_page = 1
+    per_page = min(per_page, 100)
+
+    # total count for headers
+    count_q = select(func.count()).select_from(Post)
+    if region:
+        count_q = count_q.where(Post.region == region)
+    if category:
+        count_q = count_q.where(Post.category == category.value)
+    if location_id is not None:
+        count_q = count_q.where(Post.location_id == location_id)
+    total_res = await db.execute(count_q)
+    total = int(total_res.scalar_one() or 0)
+
+    offset = (page - 1) * per_page
+    query = query.offset(offset).limit(per_page)
+
     result = await db.execute(query)
     posts = list(result.scalars().all())
+
+    # expose total count for client-side pagination
+    response.headers['X-Total-Count'] = str(total)
+    # expose total pages and whether there is a next page
+    total_pages = (total + per_page - 1) // per_page if per_page > 0 else 1
+    has_next = (offset + len(posts)) < total
+    response.headers['X-Total-Pages'] = str(total_pages)
+    response.headers['X-Has-Next'] = '1' if has_next else '0'
     return [
         PostListItem(
             id=post.id,
@@ -70,14 +103,26 @@ async def _get_location(location_id: int | None, db: AsyncSession) -> Location |
 async def create_post(payload: PostCreate, db: AsyncSession = Depends(get_db)) -> Post:
     location = await _get_location(payload.location_id, db)
 
+    # robustly derive category string whether PostCategory enum or raw string
+    if isinstance(payload.category, PostCategory):
+        category_str = payload.category.value
+    else:
+        category_str = str(payload.category) if payload.category is not None else None
+
+    region_str = None
+    if location:
+        region_str = location.region
+    elif payload.region:
+        region_str = payload.region.strip() or None
+
     post = Post(
         title=payload.title.strip(),
         content=payload.content.strip(),
         password=payload.password,
-        category=payload.category.value,
+        category=category_str,
         location_id=payload.location_id,
         thumbnail_url=location.image_url if location else None,
-        region=location.region if location else (payload.region.strip() if payload.region else None),
+        region=region_str,
         rating_score=payload.rating if payload.rating is not None else None,
     )
     db.add(post)
@@ -105,7 +150,7 @@ async def update_post(
     if payload.content is not None:
         post.content = payload.content.strip()
     if payload.category is not None:
-        post.category = payload.category.value
+        post.category = payload.category.value if isinstance(payload.category, PostCategory) else str(payload.category)
     if "location_id" in payload.model_fields_set:
         if payload.location_id is None:
             post.location_id = None
