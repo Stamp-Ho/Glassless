@@ -1,9 +1,4 @@
-<<<<<<< HEAD
-import os
 from pathlib import Path
-
-=======
->>>>>>> frontend
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

@@ -1,13 +1,8 @@
-<<<<<<< HEAD
 from datetime import datetime, timedelta
 import math
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import desc, func, select
-=======
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
->>>>>>> frontend
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db

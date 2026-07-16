@@ -13,7 +13,8 @@
 
 3. 시드 DB 파일
 - 저장소에는 `BE/data/localhub_filled.db`(샘플 데이터 포함)가 있습니다.
-- `init_db.sh` 스크립트는 배포 컨테이너에서 `/data/localhub.db`가 없으면 이 파일을 복사합니다.
+- `init_db.sh` 스크립트는 배포 컨테이너가 시작될 때 항상 리포지토리의 `BE/data/localhub_filled.db`를 `/data/localhub.db`로 복사(덮어쓰기)합니다.
+  - 이 동작은 Render 무료 플랜에서 매번 초기화되는 런타임에 기본 데이터가 항상 적용되도록 하기 위한 설정입니다.
 
 4. Start Command
 - Render의 서비스 Start Command를 아래처럼 설정하세요:
