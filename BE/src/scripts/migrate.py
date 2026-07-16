@@ -153,10 +153,10 @@ async def migrate_locations() -> None:
                 cnt_chat = int((await session.execute(select(func.count()).select_from(Post).where(Post.region == region_key, Post.category == PostCategory.chat.value))).scalar_one() or 0)
                 to_create_chat = max(0, CHAT_PER_REGION - cnt_chat)
                 for i in range(to_create_chat):
-                    rk = (region_key or "").strip() or None
+                    rk = (region_key or "").strip() or "서울"
                     p = Post(
-                        title=f"{rk or '무명'} 이야기 #{i+1}",
-                        content=(f"{rk or '무명'} 권역의 잡담 샘플 글입니다. 자동 생성({i+1})"),
+                        title=f"{rk} 이야기 #{i+1}",
+                        content=(f"{rk} 권역의 잡담 샘플 글입니다. 자동 생성({i+1})"),
                         password="init",
                         category=PostCategory.chat.value,
                         location_id=None,
@@ -169,10 +169,10 @@ async def migrate_locations() -> None:
                 cnt_q = int((await session.execute(select(func.count()).select_from(Post).where(Post.region == region_key, Post.category == PostCategory.question.value))).scalar_one() or 0)
                 to_create_q = max(0, QUESTION_PER_REGION - cnt_q)
                 for i in range(to_create_q):
-                    rk = (region_key or "").strip() or None
+                    rk = (region_key or "").strip() or "서울"
                     p = Post(
-                        title=f"{rk or '무명'} 질문 #{i+1}",
-                        content=(f"{rk or '무명'} 권역의 질문 샘플 글입니다. 자동 생성({i+1})"),
+                        title=f"{rk} 질문 #{i+1}",
+                        content=(f"{rk} 권역의 질문 샘플 글입니다. 자동 생성({i+1})"),
                         password="init",
                         category=PostCategory.question.value,
                         location_id=None,
