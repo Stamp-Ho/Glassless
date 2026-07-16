@@ -322,13 +322,32 @@ const totalPages = ref(Math.max(1, Math.ceil((totalCount.value || 0) / perPage.v
 const hasNextFlag = ref(false);
 
 const goToPage = (p) => {
+  const tp = Number(totalPages.value) || 1;
   if (p < 1) p = 1;
-  if (p > totalPages.value) p = totalPages.value;
+  if (p > tp) p = tp;
+  if (p === page.value) return;
   page.value = p;
   // update route query
   const q = { ...route.query, page: String(page.value) };
   router.push({ path: route.path, query: q });
 };
+
+const pageWindow = computed(() => {
+  const tp = Number(totalPages.value) || 1;
+  const cur = Number(page.value) || 1;
+  const span = 2; // show cur +/- span
+  let start = Math.max(1, cur - span);
+  let end = Math.min(tp, cur + span);
+  // expand window if near edges
+  while (end - start < span * 2 && (end < tp || start > 1)) {
+    if (start > 1) start = Math.max(1, start - 1);
+    if (end < tp) end = Math.min(tp, end + 1);
+    if (start === 1 && end === tp) break;
+  }
+  const pages = [];
+  for (let i = start; i <= end; i++) pages.push(i);
+  return pages;
+});
 
 // 이하 기존 코드와 동일 (기타 비즈니스 로직 유지)
 const filteredLocations = computed(() => {
@@ -701,8 +720,23 @@ const goToDetail = (id) => {
       </div>
           <div class="pagination-controls" style="display:flex; justify-content:center; gap:12px; margin-top:16px;">
             <button class="btn-secondary" :disabled="page<=1" @click="goToPage(page-1)">이전</button>
-            <div class="page-indicator">페이지 {{ page }} / {{ totalPages }}</div>
-            <button class="btn-secondary" :disabled="!hasNextFlag" @click="goToPage(page+1)">다음</button>
+            <div class="page-indicator" style="display:flex; gap:8px; align-items:center;">
+              <button class="btn-secondary" :disabled="page<=1" @click="goToPage(1)">처음</button>
+              <button class="btn-secondary" :disabled="page<=1" @click="goToPage(page-1)">이전</button>
+              <div style="display:flex; gap:6px;">
+                <button
+                  v-for="p in pageWindow"
+                  :key="p"
+                  :class="['btn-secondary', { 'active-page': p === page } ]"
+                  @click="goToPage(p)"
+                  :disabled="p===page"
+                >
+                  {{ p }}
+                </button>
+              </div>
+              <button class="btn-secondary" :disabled="!hasNextFlag" @click="goToPage(page+1)">다음</button>
+              <button class="btn-secondary" :disabled="page>=totalPages" @click="goToPage(Number(totalPages))">끝</button>
+            </div>
           </div>
     </section>
 
