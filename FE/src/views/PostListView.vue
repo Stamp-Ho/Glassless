@@ -185,6 +185,20 @@ const fetchPosts = async () => {
     posts.value = Array.isArray(data) ? data : [];
     const total = response.headers.get('X-Total-Count');
     totalCount.value = total ? Number(total) : 0;
+    // prefer server-provided total pages/has-next when available
+    const tp = response.headers.get('X-Total-Pages');
+    const hasNext = response.headers.get('X-Has-Next');
+    if (tp) {
+      totalPages.value = Number(tp) || Math.max(1, Math.ceil((totalCount.value || 0) / perPage.value));
+    } else {
+      totalPages.value = Math.max(1, Math.ceil((totalCount.value || 0) / perPage.value));
+    }
+    // store hasNext for disabling next button; fallback to page comparison
+    if (hasNext !== null) {
+      hasNextFlag.value = hasNext === '1';
+    } else {
+      hasNextFlag.value = page.value < totalPages.value;
+    }
   } catch (error) {
     console.error(error);
     errorMessage.value = '게시글 목록 조회에 실패했습니다. 잠시 후 다시 시도해 주세요.';
@@ -304,7 +318,8 @@ onMounted(async () => {
   await fetchPosts();
 });
 
-const totalPages = computed(() => Math.max(1, Math.ceil((totalCount.value || 0) / perPage.value)));
+const totalPages = ref(Math.max(1, Math.ceil((totalCount.value || 0) / perPage.value)));
+const hasNextFlag = ref(false);
 
 const goToPage = (p) => {
   if (p < 1) p = 1;
@@ -684,11 +699,11 @@ const goToDetail = (id) => {
           </div>
         </div>
       </div>
-      <div class="pagination-controls" style="display:flex; justify-content:center; gap:12px; margin-top:16px;">
-        <button class="btn-secondary" :disabled="page<=1" @click="goToPage(page-1)">이전</button>
-        <div class="page-indicator">페이지 {{ page }} / {{ totalPages }}</div>
-        <button class="btn-secondary" :disabled="page>=totalPages" @click="goToPage(page+1)">다음</button>
-      </div>
+          <div class="pagination-controls" style="display:flex; justify-content:center; gap:12px; margin-top:16px;">
+            <button class="btn-secondary" :disabled="page<=1" @click="goToPage(page-1)">이전</button>
+            <div class="page-indicator">페이지 {{ page }} / {{ totalPages }}</div>
+            <button class="btn-secondary" :disabled="!hasNextFlag" @click="goToPage(page+1)">다음</button>
+          </div>
     </section>
 
     <div v-if="isLocationModalOpen" class="location-modal-overlay" @click.self="closeLocationModal">
