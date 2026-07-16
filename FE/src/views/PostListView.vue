@@ -591,7 +591,7 @@ const goToDetail = (id) => {
           <option v-for="region in regionOptions" :key="region" :value="region">{{ region }}</option>
         </select>
 
-        <select v-model="filterCategory" @change="fetchPosts">
+        <select v-model="filterCategory" @change="updateFilterRoute">
           <option value="">전체 카테고리</option>
           <option v-for="cat in categoryOptions" :key="cat" :value="cat">{{ cat }}</option>
         </select>
