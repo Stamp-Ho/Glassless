@@ -125,15 +125,18 @@ async def migrate_locations() -> None:
                     if existing_post:
                         continue
 
+                    # sanitize fields and set a sensible default rating for seeded reviews
+                    title_text = (loc.name or "무명")
+                    title_text = title_text.strip()
                     seed_post = Post(
-                        title=f"{loc.name} 후기",
-                        content=f"이 글은 자동 생성된 샘플 후기입니다. {loc.name}에 대한 간단한 설명입니다.",
+                        title=f"{title_text} 후기",
+                        content=(f"이 글은 자동 생성된 샘플 후기입니다. {title_text}에 대한 간단한 설명입니다.").strip(),
                         password="init",
                         category=PostCategory.review.value,
                         location_id=loc.id,
-                        thumbnail_url=loc.image_url,
-                        region=loc.region,
-                        rating_score=None,
+                        thumbnail_url=(loc.image_url or None),
+                        region=(loc.region or None),
+                        rating_score=3,
                     )
                     session.add(seed_post)
                     await session.flush()
@@ -150,14 +153,15 @@ async def migrate_locations() -> None:
                 cnt_chat = int((await session.execute(select(func.count()).select_from(Post).where(Post.region == region_key, Post.category == PostCategory.chat.value))).scalar_one() or 0)
                 to_create_chat = max(0, CHAT_PER_REGION - cnt_chat)
                 for i in range(to_create_chat):
+                    rk = (region_key or "").strip() or None
                     p = Post(
-                        title=f"{region_key} 이야기 #{i+1}",
-                        content=f"{region_key} 권역의 잡담 샘플 글입니다. 자동 생성({i+1})",
+                        title=f"{rk or '무명'} 이야기 #{i+1}",
+                        content=(f"{rk or '무명'} 권역의 잡담 샘플 글입니다. 자동 생성({i+1})"),
                         password="init",
                         category=PostCategory.chat.value,
                         location_id=None,
                         thumbnail_url=None,
-                        region=region_key,
+                        region=rk,
                     )
                     session.add(p)
 
@@ -165,14 +169,15 @@ async def migrate_locations() -> None:
                 cnt_q = int((await session.execute(select(func.count()).select_from(Post).where(Post.region == region_key, Post.category == PostCategory.question.value))).scalar_one() or 0)
                 to_create_q = max(0, QUESTION_PER_REGION - cnt_q)
                 for i in range(to_create_q):
+                    rk = (region_key or "").strip() or None
                     p = Post(
-                        title=f"{region_key} 질문 #{i+1}",
-                        content=f"{region_key} 권역의 질문 샘플 글입니다. 자동 생성({i+1})",
+                        title=f"{rk or '무명'} 질문 #{i+1}",
+                        content=(f"{rk or '무명'} 권역의 질문 샘플 글입니다. 자동 생성({i+1})"),
                         password="init",
                         category=PostCategory.question.value,
                         location_id=None,
                         thumbnail_url=None,
-                        region=region_key,
+                        region=rk,
                     )
                     session.add(p)
 
