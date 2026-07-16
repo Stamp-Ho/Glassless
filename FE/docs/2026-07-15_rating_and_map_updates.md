@@ -1,3 +1,15 @@
+<<<<<<< HEAD
+(updated) See BE/docs or README for comments addition and rating behavior.
+
+## Added Comments Feature
+- Comments have `nickname`, `password`, and `content`. `post_id` is provided as the URL path parameter for the POST endpoint.
+- Endpoints added on BE:
+  - POST `/api/comments/posts/{post_id}`
+  - PUT `/api/comments/{comment_id}`
+  - DELETE `/api/comments/{comment_id}`
+- Posts now include `comments_count` which is updated when comments are created/deleted.
+
+=======
 # 2026-07-15 — Rating & Map UX + Backend Support
 
 This document summarizes the changes made on 2026-07-15 to support ratings, map UI updates, and post flow. Apply / review these changes and run the notes below.
@@ -68,3 +80,4 @@ If you want, I can:
 - Create an Alembic migration file for `rating_score`.
 - Commit & push this docs file and the FE changes (I can push FE branch as well).
 - Run a quick integration test (curl) to POST a `후기` with `rating` once DB is migrated.
+>>>>>>> frontend

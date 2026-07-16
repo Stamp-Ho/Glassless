@@ -9,6 +9,8 @@ from app.core.database import init_db
 from app.routers.chat import router as chat_router
 from app.routers.locations import router as locations_router
 from app.routers.posts import router as posts_router
+from app.routers.comments import router as comments_router
+from app.routers.stats import router as stats_router
 from scripts.migrate import seed_locations_if_empty
 
 
@@ -21,12 +23,20 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
+cors_allow_origins = settings.cors_origins_list
+cors_allow_credentials = True
+if settings.app_env and settings.app_env.lower() == 'dev':
+    # In dev, allow all origins for convenience (no credentials)
+    cors_allow_origins = ["*"]
+    cors_allow_credentials = False
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
-    allow_credentials=True,
+    allow_origins=cors_allow_origins,
+    allow_credentials=cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Total-Count", "X-Total-Pages", "X-Has-Next"],
 )
 
 
@@ -46,3 +56,5 @@ async def swagger_ui_html():
 app.include_router(posts_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(locations_router, prefix="/api")
+app.include_router(comments_router, prefix="/api")
+app.include_router(stats_router, prefix="/api")
