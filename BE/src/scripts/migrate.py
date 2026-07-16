@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 
 from app.core.database import SessionLocal, init_db
 from app.models.location import Location
-from app.models.post import Post
+from app.models.post import Post, PostCategory
 from app.models.comment import Comment
 
 BASE_DIR = Path(__file__).resolve().parents[2]
