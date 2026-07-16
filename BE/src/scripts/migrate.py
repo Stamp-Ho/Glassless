@@ -6,6 +6,8 @@ from sqlalchemy import func, select
 
 from app.core.database import SessionLocal, init_db
 from app.models.location import Location
+from app.models.post import Post
+from app.models.comment import Comment
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = BASE_DIR / "data"
@@ -51,6 +53,7 @@ async def migrate_locations() -> None:
 
     inserted = 0
     skipped = 0
+    inserted_content_ids: list[str] = []
 
     async with SessionLocal() as session:
         for file_path in files:
@@ -96,8 +99,48 @@ async def migrate_locations() -> None:
                     )
                 )
                 inserted += 1
+                inserted_content_ids.append(content_id)
 
         await session.commit()
+
+        # After committing new locations, create seed posts/comments for them (idempotent)
+        if inserted_content_ids:
+            for cid in inserted_content_ids:
+                stmt = select(Location).where(Location.content_id == cid)
+                res = await session.execute(stmt)
+                loc = res.scalar_one_or_none()
+                if not loc:
+                    continue
+
+                # Check whether a post already exists for this location
+                post_stmt = select(Post.id).where(Post.location_id == loc.id)
+                existing_post = (await session.execute(post_stmt)).first()
+                if existing_post:
+                    continue
+
+                # create a simple seed post and one comment
+                seed_post = Post(
+                    title=f"{loc.name} 후기",
+                    content=f"이 글은 자동 생성된 샘플 후기입니다. {loc.name}에 대한 간단한 설명입니다.",
+                    password="init",
+                    category=PostCategory.review.value if hasattr(Post, 'category') else "후기",
+                    location_id=loc.id,
+                    thumbnail_url=loc.image_url,
+                    region=loc.region,
+                    rating_score=None,
+                )
+                session.add(seed_post)
+                await session.flush()
+
+                seed_comment = Comment(
+                    post_id=seed_post.id,
+                    nickname="관리자",
+                    password="init",
+                    content="샘플 댓글입니다.",
+                )
+                session.add(seed_comment)
+
+            await session.commit()
 
     print(f"Migration complete. files={len(files)}, inserted={inserted}, skipped={skipped}")
 
