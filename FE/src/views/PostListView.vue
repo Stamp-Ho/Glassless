@@ -16,6 +16,9 @@ const filterRegion = ref('');
 const filterCategory = ref('');
 const filterLocationId = ref('');
 const selectedFilterLocation = ref(null);
+const page = ref(Number(route.query.page || 1));
+const perPage = ref(12);
+const totalCount = ref(0);
 
 const regionOptions = ['서울', '부산', '광주_전라권', '구미_경북권', '대전_충청권'];
 const categoryOptions = ['잡담', '후기', '질문', '구인'];
@@ -149,6 +152,8 @@ const buildPostsUrl = () => {
   if (route.query.region) params.set('region', route.query.region);
   if (route.query.category) params.set('category', route.query.category);
   if (route.query.location_id) params.set('location_id', route.query.location_id);
+  params.set('page', String(page.value || 1));
+  params.set('per_page', String(perPage.value));
   const url = `${API_BASE_URL}/api/posts?${params.toString()}`;
   console.debug('Fetching posts URL:', url);
   return url;
@@ -173,7 +178,10 @@ const fetchPosts = async () => {
     if (!response.ok) {
       throw new Error('게시글 목록을 불러오지 못했습니다.');
     }
-    posts.value = await response.json();
+    const data = await response.json();
+    posts.value = Array.isArray(data) ? data : [];
+    const total = response.headers.get('X-Total-Count');
+    totalCount.value = total ? Number(total) : 0;
   } catch (error) {
     console.error(error);
     errorMessage.value = '게시글 목록 조회에 실패했습니다. 잠시 후 다시 시도해 주세요.';
@@ -266,6 +274,7 @@ watch(
     filterRegion.value = newQuery.region || '';
     filterCategory.value = newQuery.category || '';
     filterLocationId.value = newQuery.location_id || '';
+    page.value = Number(newQuery.page || 1);
 
     // URL에 location_id는 있는데 상세 정보 오브젝트가 매핑되어 있지 않다면 백엔드에서 조회
     if (newQuery.location_id && (!selectedFilterLocation.value || String(selectedFilterLocation.value.id) !== String(newQuery.location_id))) {
@@ -284,12 +293,24 @@ onMounted(async () => {
   filterRegion.value = route.query.region || '';
   filterCategory.value = route.query.category || '';
   filterLocationId.value = route.query.location_id || '';
+  page.value = Number(route.query.page || 1);
 
   if (filterLocationId.value) {
     await fetchSelectedLocationInfo(filterLocationId.value);
   }
   await fetchPosts();
 });
+
+const totalPages = computed(() => Math.max(1, Math.ceil((totalCount.value || 0) / perPage.value)));
+
+const goToPage = (p) => {
+  if (p < 1) p = 1;
+  if (p > totalPages.value) p = totalPages.value;
+  page.value = p;
+  // update route query
+  const q = { ...route.query, page: String(page.value) };
+  router.push({ path: route.path, query: q });
+};
 
 // 이하 기존 코드와 동일 (기타 비즈니스 로직 유지)
 const filteredLocations = computed(() => {
@@ -632,7 +653,7 @@ const goToDetail = (id) => {
       <p v-if="isLoading" class="state-text">게시글을 불러오는 중입니다...</p>
       <p v-else-if="posts.length === 0" class="state-text">조건에 맞는 게시글이 없습니다.</p>
       
-      <div class="grid-container">
+        <div class="grid-container">
           <div v-for="post in posts" :key="post.id" class="post-card" @click="goToDetail(post.id)">
             <div
               class="card-image-field"
@@ -659,6 +680,11 @@ const goToDetail = (id) => {
             </div>
           </div>
         </div>
+      </div>
+      <div class="pagination-controls" style="display:flex; justify-content:center; gap:12px; margin-top:16px;">
+        <button class="btn-secondary" :disabled="page<=1" @click="goToPage(page-1)">이전</button>
+        <div class="page-indicator">페이지 {{ page }} / {{ totalPages }}</div>
+        <button class="btn-secondary" :disabled="page>=totalPages" @click="goToPage(page+1)">다음</button>
       </div>
     </section>
 

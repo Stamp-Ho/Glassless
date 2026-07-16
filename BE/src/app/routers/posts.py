@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
+from sqlalchemy import func
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,9 +13,12 @@ router = APIRouter(prefix="/posts", tags=["posts"])
 
 @router.get("", response_model=list[PostListItem])
 async def list_posts(
+    response: Response,
     region: str | None = None,
     category: PostCategory | None = None,
     location_id: int | None = None,
+    page: int = 1,
+    per_page: int = 20,
     db: AsyncSession = Depends(get_db),
 ) -> list[PostListItem]:
     query = select(Post)
@@ -26,8 +30,32 @@ async def list_posts(
         query = query.where(Post.location_id == location_id)
     query = query.order_by(desc(Post.created_at))
 
+    # sanitize paging
+    if page < 1:
+        page = 1
+    if per_page < 1:
+        per_page = 1
+    per_page = min(per_page, 100)
+
+    # total count for headers
+    count_q = select(func.count()).select_from(Post)
+    if region:
+        count_q = count_q.where(Post.region == region)
+    if category:
+        count_q = count_q.where(Post.category == category.value)
+    if location_id is not None:
+        count_q = count_q.where(Post.location_id == location_id)
+    total_res = await db.execute(count_q)
+    total = int(total_res.scalar_one() or 0)
+
+    offset = (page - 1) * per_page
+    query = query.offset(offset).limit(per_page)
+
     result = await db.execute(query)
     posts = list(result.scalars().all())
+
+    # expose total count for client-side pagination
+    response.headers['X-Total-Count'] = str(total)
     return [
         PostListItem(
             id=post.id,
