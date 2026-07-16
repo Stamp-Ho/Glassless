@@ -64,10 +64,46 @@ const toggleChat = async () => {
   }
 };
 
+// const scrollToBottom = async () => {
+//   await nextTick();
+//   if (chatBodyRef.value) {
+//     const el = chatBodyRef.value;
+
+//     // 💡 핵심 로직:
+//     // 사용자가 스크롤을 이미 위로 올려서 보고 있다면 자동으로 내려가지 않음.
+//     // 맨 아래에서 약 100px 이내에 있을 때만 자동으로 내려감.
+//     const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+
+//     if (isNearBottom) {
+//       el.scrollTop = el.scrollHeight;
+//     }
+//     // 사용자가 위로 스크롤해서 보고 있다면 아무 동작도 하지 않음 (현재 위치 유지)
+//   }
+// };
 const scrollToBottom = async () => {
   await nextTick();
   if (chatBodyRef.value) {
-    chatBodyRef.value.scrollTop = chatBodyRef.value.scrollHeight;
+    const el = chatBodyRef.value;
+
+    // 1. 현재 스크롤 위치가 거의 끝인지 확인 (사용자가 수동 스크롤 중인지 판단)
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+
+    if (isNearBottom) {
+      // 2. 가장 마지막 대화 말풍선 요소 가져오기
+      const bubbles = el.querySelectorAll(".chat-bubble-wrapper");
+      if (bubbles.length > 0) {
+        const lastBubble = bubbles[bubbles.length - 1];
+
+        // 3. 마지막 말풍선의 위치 정보 계산
+        // 마지막 말풍선의 하단 위치 + 살짝 보일 여백(예: 20px)만큼 스크롤
+        const bubbleBottom = lastBubble.offsetTop + lastBubble.offsetHeight;
+
+        // 4. 입력창이 가리지 않도록 계산된 위치로 이동
+        // 입력창 높이가 보통 60~80px 정도이므로,
+        // 말풍선 하단이 입력창 위로 살짝 올라오게 scrollTop 설정
+        el.scrollTop = bubbleBottom - el.clientHeight + 80;
+      }
+    }
   }
 };
 
@@ -1359,6 +1395,19 @@ html.dark {
   gap: 16px;
   transition: background-color 0.3s;
 }
+
+/* 
+.chatbot-body {
+  flex: 1;
+  padding: 20px;
+  padding-bottom: 80px;
+  overflow-y: auto;
+  background-color: var(--bg-chat-body);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: background-color 0.3s;
+}  */
 .chat-bubble-wrapper {
   display: flex;
   width: 100%;
