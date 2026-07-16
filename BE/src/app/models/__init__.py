@@ -1,5 +1,4 @@
 from app.models.location import Location
-from app.models.location_rating import LocationRating
 from app.models.post import Post
 
-__all__ = ["Post", "Location", "LocationRating"]
+__all__ = ["Post", "Location"]

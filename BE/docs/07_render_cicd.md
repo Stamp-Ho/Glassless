@@ -16,7 +16,7 @@
 - Health Check Path: `/health`
 - Free 플랜 제약:
   - `disk`는 지원되지 않음
-  - DB 경로는 코드에서 `PORT`/`RENDER` 환경을 보고 `sqlite+aiosqlite:////tmp/localhub.db`로 자동 선택
+  - DB 경로: `sqlite+aiosqlite:////tmp/localhub.db` (임시 저장소)
   - 재배포/재시작 시 DB 데이터가 유실될 수 있음
 
 앱 시작 시 `locations` 테이블이 비어 있으면 `BE/data/<권역>/*.json`을 자동 적재합니다.
@@ -43,11 +43,19 @@
 
 선택 변수(운영 환경):
 - `OPENAI_API_KEY`
+- `CORS_ORIGINS`
 
 ## 5) Render 환경 변수 확인
 
-`render.yaml`에는 이제 `OPENAI_API_KEY`만 두고, 나머지 설정은 코드 기본값을 사용합니다.
-운영에서 꼭 필요한 값은 `OPENAI_API_KEY`뿐입니다.
+`render.yaml`에 기본값이 있지만, 운영에서는 Render Dashboard에서 재확인 권장:
+
+- `DATABASE_URL`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `OPENAI_MAX_TOKENS`
+- `OPENAI_TIMEOUT_SECONDS`
+- `CHAT_MAX_QUERY_LENGTH`
+- `CHAT_MAX_REFERENCES`
 
 ## 6) 배포 흐름
 

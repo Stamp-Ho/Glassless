@@ -10,6 +10,7 @@ from app.routers.chat import router as chat_router
 from app.routers.locations import router as locations_router
 from app.routers.posts import router as posts_router
 from app.routers.comments import router as comments_router
+from app.routers.stats import router as stats_router
 from scripts.migrate import seed_locations_if_empty
 
 
@@ -25,7 +26,7 @@ app = FastAPI(title=settings.app_name, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
-    allow_credentials=settings.cors_allow_credentials,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -48,3 +49,4 @@ app.include_router(posts_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(locations_router, prefix="/api")
 app.include_router(comments_router, prefix="/api")
+app.include_router(stats_router, prefix="/api")

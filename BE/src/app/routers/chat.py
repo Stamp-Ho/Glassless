@@ -49,6 +49,9 @@ def _map_to_allowed_region(region_str: str | None) -> str | None:
         return None
     norm = re.sub(r"\s+", "", region_str).lower()
     for canonical, aliases in _ALLOWED_REGION_MAP.items():
+        # accept if the extracted region already matches a canonical key
+        if canonical.lower() in norm:
+            return canonical
         for a in aliases:
             if a.lower() in norm:
                 return canonical
@@ -289,11 +292,11 @@ async def _extract_region_category_via_openai(query_text: str) -> tuple[str | No
     """
     system = (
         "당신은 텍스트에서 한국의 '권역', '카테고리 목록', 그리고 '제외할 카테고리 목록'을 추출하는 도우미입니다.\n"
-        "권역은 예: 서울, 부산, 대구, 인천, 광주, 대전, 울산, 세종, 경기, 강원, 충북, 충남, 전북, 전남, 경북, 경남, 제주 중 하나입니다.\n"
+        "권역은 예: 광주_전라권, 구미_경북권, 대전_충청권, 부산, 서울 중 하나입니다.\n"
         "카테고리는 예: 관광지, 레포츠, 여행코스, 문화시설, 쇼핑, 숙박, 음식점, 축제공연행사 중 하나입니다.\n"
-        "사용자 질문에서 가능한 경우 한국어로 정확한 항목 이름을 반환하세요.\n"
-        "응답은 반드시 JSON 하나의 객체로만 하세요. 형식 예시: {\"region\": \"서울\", \"categories\": [\"레포츠\", \"관광지\"], \"excluded\": [\"레포츠\"]}\n"
-        "필드 설명: 'region'은 문자열 또는 null, 'categories'는 문자열 배열 또는 null, 'excluded'는 문자열 배열 또는 null.\n"
+        "사용자 질문에서 가능한 경우 위에 적힌 '권역' 키(예: 광주_전라권)를 그대로 반환하세요.\n"
+        "응답은 반드시 JSON 하나의 객체로만 하세요. 형식 예시: {\"region\": \"광주_전라권\", \"categories\": [\"레포츠\", \"관광지\"], \"excluded\": [\"레포츠\"]}\n"
+        "필드 설명: 'region'은 문자열(위 다섯 중 하나) 또는 null, 'categories'는 문자열 배열 또는 null, 'excluded'는 문자열 배열 또는 null.\n"
         "값을 알 수 없으면 해당 필드를 null로 하세요. 다른 텍스트나 설명을 덧붙이지 마세요."
     )
 
@@ -489,14 +492,22 @@ async def chat(payload: ChatRequest, db: AsyncSession = Depends(get_db)) -> Chat
         )
 
     refs = []
-    lines = []
     for idx, (location_obj, rating_avg, rating_count) in enumerate(rows, 1):
         refs.append(
             LocationRef(id=location_obj.id, name=location_obj.name, category=location_obj.category, address=location_obj.address)
         )
-        lines.append(f"[{idx}] {location_obj.name} — {location_obj.category} | 주소: {location_obj.address or '-'} | 별점: {float(rating_avg):.1f} ({int(rating_count)}개)")
 
-    answer = "\n".join(lines)
+    # Simplified user-facing answer: short confirmation sentence
+    _display_region_map = {
+        "광주_전라권": "광주/전라권",
+        "구미_경북권": "구미/경북권",
+        "대전_충청권": "대전/충청권",
+        "부산": "부산",
+        "서울": "서울",
+    }
+    display_region = _display_region_map.get(region, (region or "지역").replace("_", "/"))
+    cat_display = categories[0] if categories else "정보"
+    answer = f"네, {display_region}의 {cat_display} 정보를 알려드릴게요."
     return ChatResponse(
         answer=answer,
         references=refs,

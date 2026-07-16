@@ -57,7 +57,6 @@ class PostListItem(BaseModel):
 
     id: int
     title: str
-    content: str
     category: PostCategory
     location_id: int | None
     thumbnail_url: str | None

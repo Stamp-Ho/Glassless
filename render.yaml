@@ -9,5 +9,25 @@ services:
     autoDeploy: true
     healthCheckPath: /health
     envVars:
+      - key: APP_ENV
+        value: prod
+      - key: APP_HOST
+        value: 0.0.0.0
+      - key: APP_PORT
+        value: "8000"
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:////tmp/localhub.db
+      - key: CORS_ORIGINS
+        sync: false
       - key: OPENAI_API_KEY
         sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_MAX_TOKENS
+        value: "500"
+      - key: OPENAI_TIMEOUT_SECONDS
+        value: "15"
+      - key: CHAT_MAX_QUERY_LENGTH
+        value: "500"
+      - key: CHAT_MAX_REFERENCES
+        value: "10"

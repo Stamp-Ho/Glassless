@@ -40,31 +40,17 @@
 - `query` 길이 제한 (`CHAT_MAX_QUERY_LENGTH`)
 - 공백-only 입력 거부
 
-### 요청 예시
-
-```json
-{
-	"query": "공원 갈랭",
-	"region": "서울",
-	"category": ""
-}
-```
-
-- `region`을 주면 해당 권역 후보를 우선 검색
-- `category`는 비워도 되며, 서버에서 자동으로 `null`로 정규화
-
 ### RAG 흐름
 
 1. 자연어 질의 수신
-2. SQLite `Location`에서 키워드 LIKE 검색 또는 카테고리/지역 필터
-3. 후보가 비면 지역/카테고리/전체 데이터로 단계적 fallback
-4. 상위 N건 컨텍스트 문자열로 직렬화
+2. SQLite `Location`에서 키워드 LIKE 검색 또는 카테고리 필터
+3. 상위 N건 컨텍스트 문자열로 직렬화
 4. OpenAI에 시스템 프롬프트 + 컨텍스트 + 사용자 질문 전달
 5. 응답 + 참고 데이터 목록 반환
 
 ### OpenAI 호출 제약
 
-- 모델에 따라 `max_tokens` 또는 `max_completion_tokens` 사용
+- `max_tokens` 명시 (기본 500)
 - `httpx.Timeout` 필수
 - 모델은 환경변수로 주입
 
@@ -98,7 +84,6 @@
 ## 5) Locations API (원천 데이터 조회)
 
 이 API는 서버 시작 시 `BE/data/<권역>/*.json`에서 적재된 `Location` 테이블을 조회합니다.
-응답에는 별점 평균(`rating_avg`)과 별점 개수(`rating_count`)가 포함됩니다.
 
 ### GET `/api/locations`
 
@@ -117,24 +102,3 @@
 
 - 단건 상세 조회
 - 없으면 404
-
-### POST `/api/locations/{location_id}/ratings`
-
-- 명소 별점 등록
-- 요청 바디:
-
-```json
-{
-	"score": 5,
-	"client_id": "localstorage-uuid"
-}
-```
-
-- 제한:
-	- 점수는 1~5점
-	- IP + User-Agent + `client_id` 조합으로 24시간 내 중복 제출 방지
-	- 중복 제출 시 429 반환
-- 응답:
-	- 저장된 rating 정보
-	- 최신 `rating_avg`
-	- 최신 `rating_count`
