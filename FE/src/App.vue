@@ -1,9 +1,10 @@
 <script setup>
 import { ref, nextTick, computed, onMounted } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router"; // 👈 useRouter 추가
 import CommonHeader from "./components/CommonHeader.vue";
 
 const route = useRoute();
+const router = useRouter(); // 👈 라우터 선언
 const isHomePage = computed(() => route.path === "/");
 
 // =========================================================================
@@ -125,6 +126,78 @@ const extractRegion = (text) => {
     if (text.includes(reg)) return reg;
   }
   return "";
+};
+
+// // ✨ [새로 추가된 기능] 연관 장소 클릭 시 라우터 이동
+// const navigateToFilteredList = (refItem) => {
+//   isChatOpen.value = false; // 챗봇 닫기
+
+//   let targetRegion = "";
+//   if (refItem.address) {
+//     if (refItem.address.includes("서울")) targetRegion = "서울";
+//     else if (refItem.address.includes("부산")) targetRegion = "부산";
+//     else if (
+//       refItem.address.includes("광주") ||
+//       refItem.address.includes("전라")
+//     )
+//       targetRegion = "광주_전라권";
+//     else if (
+//       refItem.address.includes("구미") ||
+//       refItem.address.includes("경북")
+//     )
+//       targetRegion = "구미_경북권";
+//     else if (
+//       refItem.address.includes("대전") ||
+//       refItem.address.includes("충청")
+//     )
+//       targetRegion = "대전_충청권";
+//   }
+
+//   // 게시물 목록 페이지(예: /)로 쿼리 스트링과 함께 이동
+//   // (게시물 목록 페이지 라우트가 '/' 가 아니라면 path를 수정해주세요)
+//   router.push({
+//     path: "/",
+//     query: {
+//       region: targetRegion,
+//     },
+//   });
+// };
+// ✨ [추가] 추천 장소 클릭 시 페이지 이동 및 필터 적용 함수
+const navigateToFilteredList = (refItem) => {
+  isChatOpen.value = false; // 챗봇 닫기
+
+  // refItem의 address와 category를 기반으로 PostListView의 필터에 맞는 값 추출
+  // PostListView의 regionOptions: ['서울', '부산', '광주_전라권', '구미_경북권', '대전_충청권']
+  let targetRegion = "";
+  if (refItem.address) {
+    if (refItem.address.includes("서울")) targetRegion = "서울";
+    else if (refItem.address.includes("부산")) targetRegion = "부산";
+    else if (
+      refItem.address.includes("광주") ||
+      refItem.address.includes("전라")
+    )
+      targetRegion = "광주_전라권";
+    else if (
+      refItem.address.includes("구미") ||
+      refItem.address.includes("경북")
+    )
+      targetRegion = "구미_경북권";
+    else if (
+      refItem.address.includes("대전") ||
+      refItem.address.includes("충청")
+    )
+      targetRegion = "대전_충청권";
+  }
+
+  // 게시물 목록 페이지(예: /posts)로 이동.
+  // 만약 게시물 목록이 메인("/")에 있다면 path를 "/"로 유지하세요.
+  router.push({
+    path: "/posts", // 실제 게시물 목록 페이지 경로를 확인 후 수정하세요
+    query: {
+      region: targetRegion,
+      category: "", // 필요시 refItem.category 활용
+    },
+  });
 };
 
 // =========================================================================
@@ -382,7 +455,6 @@ const searchWeather = async () => {
     <CommonHeader :isDarkMode="isDarkMode" @toggle-theme="toggleTheme" />
     <router-view />
 
-    <!-- ✨ 고정 다크모드 버튼 (홈페이지가 아닐 때만 표시) -->
     <button
       v-if="!isHomePage"
       class="theme-toggle-btn"
@@ -393,7 +465,6 @@ const searchWeather = async () => {
       <span v-else>🌙</span>
     </button>
 
-    <!-- 우측 아래 기존 날씨 / 챗봇 버튼 (홈페이지가 아닐 때만 표시) -->
     <button
       v-if="!isHomePage"
       class="weather-floating-btn"
@@ -554,7 +625,8 @@ const searchWeather = async () => {
               <div
                 v-for="refItem in msg.references"
                 :key="refItem.id"
-                class="reference-card"
+                class="reference-card clickable-ref-card"
+                @click="navigateToFilteredList(refItem)"
               >
                 <div class="ref-card-header">
                   <span class="ref-badge">{{ refItem.category }}</span>
@@ -1500,5 +1572,18 @@ html.dark .section-title {
 html.dark .grid-section h2,
 html.dark .grid-section .section-title {
   color: #f1f5f9 !important;
+}
+
+/* ✨ [신규 추가] 챗봇 추천 카드 호버/클릭 효과 */
+.clickable-ref-card {
+  cursor: pointer;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
+}
+.clickable-ref-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: #ff385c;
 }
 </style>

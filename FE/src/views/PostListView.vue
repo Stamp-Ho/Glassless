@@ -1,6 +1,6 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
+import { computed, onMounted, ref, watch } from "vue";
+import { useRouter, useRoute } from "vue-router";
 
 const router = useRouter();
 const route = useRoute(); // 쿼리 스트링 감지를 위해 추가
@@ -8,48 +8,64 @@ const route = useRoute(); // 쿼리 스트링 감지를 위해 추가
 const posts = ref([]);
 const isLoading = ref(false);
 const isSubmitting = ref(false);
-const errorMessage = ref('');
+const errorMessage = ref("");
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://glassless-be.onrender.com';
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "https://glassless-be.onrender.com";
 
-const filterRegion = ref('');
-const filterCategory = ref('');
-const filterLocationId = ref('');
+const filterRegion = ref("");
+const filterCategory = ref("");
+const filterLocationId = ref("");
 const selectedFilterLocation = ref(null);
 
-const regionOptions = ['서울', '부산', '광주_전라권', '구미_경북권', '대전_충청권'];
-const categoryOptions = ['잡담', '후기', '질문', '구인'];
-const locationCategoryOptions = ['관광지', '문화시설', '축제공연행사', '여행코스', '레포츠', '숙박', '쇼핑', '음식점'];
+const regionOptions = [
+  "서울",
+  "부산",
+  "광주_전라권",
+  "구미_경북권",
+  "대전_충청권",
+];
+const categoryOptions = ["잡담", "후기", "질문", "구인"];
+const locationCategoryOptions = [
+  "관광지",
+  "문화시설",
+  "축제공연행사",
+  "여행코스",
+  "레포츠",
+  "숙박",
+  "쇼핑",
+  "음식점",
+];
 
 // 입력 폼 상태 관리
 const isFormOpen = ref(false);
-const selectedCategory = ref('잡담');
-const newTitle = ref('');
-const newRegion = ref('');
-const newContent = ref('');
-const newLocationId = ref('');
-const newThumbnailUrl = ref('');
-const newPassword = ref('');
+const selectedCategory = ref("잡담");
+const newTitle = ref("");
+const newRegion = ref("");
+const newContent = ref("");
+const newLocationId = ref("");
+const newThumbnailUrl = ref("");
+const newPassword = ref("");
 const selectedNewLocation = ref(null);
 const rating = ref(0);
-const ratingErrorMessage = ref('');
+const ratingErrorMessage = ref("");
 
 function setRating(n) {
   rating.value = n;
   // clear previous rating error message
-  ratingErrorMessage.value = '';
+  ratingErrorMessage.value = "";
 }
 
-const CLIENT_ID_KEY = 'app_client_id_v1';
-const LOCATION_RATING_KEY_PREFIX = 'location_rating_';
+const CLIENT_ID_KEY = "app_client_id_v1";
+const LOCATION_RATING_KEY_PREFIX = "location_rating_";
 
 async function ensureClientId() {
   let id = localStorage.getItem(CLIENT_ID_KEY);
   if (id) return id;
   // generate from IP + UA + time
-  let ip = 'unknown';
+  let ip = "unknown";
   try {
-    const resp = await fetch('https://api.ipify.org?format=json');
+    const resp = await fetch("https://api.ipify.org?format=json");
     if (resp.ok) {
       const j = await resp.json();
       ip = j.ip || ip;
@@ -57,16 +73,16 @@ async function ensureClientId() {
   } catch (e) {
     // ignore
   }
-  const ua = navigator.userAgent || 'ua-unknown';
+  const ua = navigator.userAgent || "ua-unknown";
   // NOTE: do not include a timestamp per request; derive id from IP + User-Agent only
   const base = `${ip}|${ua}`;
   try {
     const enc = new TextEncoder().encode(base);
-    const hashBuf = await crypto.subtle.digest('SHA-256', enc);
+    const hashBuf = await crypto.subtle.digest("SHA-256", enc);
     const hashArray = Array.from(new Uint8Array(hashBuf));
-    id = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    id = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
   } catch (e) {
-    id = `${ip}-${Math.random().toString(36).slice(2,10)}`;
+    id = `${ip}-${Math.random().toString(36).slice(2, 10)}`;
   }
   localStorage.setItem(CLIENT_ID_KEY, id);
   return id;
@@ -76,7 +92,9 @@ function hasSubmittedRating(locationId) {
   try {
     const key = LOCATION_RATING_KEY_PREFIX + locationId;
     return !!localStorage.getItem(key);
-  } catch (e) { return false; }
+  } catch (e) {
+    return false;
+  }
 }
 
 function storeSubmittedRating(locationId, score) {
@@ -84,9 +102,10 @@ function storeSubmittedRating(locationId, score) {
     const key = LOCATION_RATING_KEY_PREFIX + locationId;
     const payload = { score, ts: Date.now() };
     localStorage.setItem(key, JSON.stringify(payload));
-  } catch (e) { /* ignore */ }
+  } catch (e) {
+    /* ignore */
+  }
 }
-
 
 async function submitRatingForLocation(locationId, score) {
   if (!locationId) return;
@@ -94,127 +113,138 @@ async function submitRatingForLocation(locationId, score) {
 
   const clientId = await ensureClientId();
   try {
-    const resp = await fetch(`${API_BASE_URL}/api/locations/${encodeURIComponent(locationId)}/ratings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ score, client_id: clientId }),
-    });
+    const resp = await fetch(
+      `${API_BASE_URL}/api/locations/${encodeURIComponent(locationId)}/ratings`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ score, client_id: clientId }),
+      },
+    );
     if (resp.status === 429) {
-      ratingErrorMessage.value = '해당 명소에 이미 별점을 남겼습니다';
-      showToast(ratingErrorMessage.value, 'error');
+      ratingErrorMessage.value = "해당 명소에 이미 별점을 남겼습니다";
+      showToast(ratingErrorMessage.value, "error");
       showRatingFailure(ratingErrorMessage.value);
       return false;
     }
     if (!resp.ok) {
-      console.error('rating post failed', resp.status);
-      const msg = '별점 등록에 실패했습니다.';
-      showToast(msg, 'error');
+      console.error("rating post failed", resp.status);
+      const msg = "별점 등록에 실패했습니다.";
+      showToast(msg, "error");
       showRatingFailure(msg);
       return false;
     }
     // success: persist submission record locally
     storeSubmittedRating(locationId, score);
-    showToast('별점이 등록되었습니다.', 'success');
+    showToast("별점이 등록되었습니다.", "success");
     // refresh details for selected locations if visible
     try {
-      if (selectedNewLocation.value && String(selectedNewLocation.value.id) === String(locationId)) {
-        await fetchSelectedLocationInfo(locationId, 'create');
+      if (
+        selectedNewLocation.value &&
+        String(selectedNewLocation.value.id) === String(locationId)
+      ) {
+        await fetchSelectedLocationInfo(locationId, "create");
       }
-      if (selectedFilterLocation.value && String(selectedFilterLocation.value.id) === String(locationId)) {
-        await fetchSelectedLocationInfo(locationId, 'filter');
+      if (
+        selectedFilterLocation.value &&
+        String(selectedFilterLocation.value.id) === String(locationId)
+      ) {
+        await fetchSelectedLocationInfo(locationId, "filter");
       }
     } catch (e) {
       // ignore
     }
     return true;
   } catch (e) {
-    console.error('submitRatingForLocation error', e);
-    showToast('별점 등록에 실패했습니다.', 'error');
+    console.error("submitRatingForLocation error", e);
+    showToast("별점 등록에 실패했습니다.", "error");
     return false;
   }
 }
 
 // 명소 검색 모달 상태
 const isLocationModalOpen = ref(false);
-const locationModalScope = ref('create');
-const locationSearchRegion = ref('');
-const locationSearchCategory = ref('');
-const locationSearchKeyword = ref('');
+const locationModalScope = ref("create");
+const locationSearchRegion = ref("");
+const locationSearchCategory = ref("");
+const locationSearchKeyword = ref("");
 const loadedLocations = ref([]);
 const isLocationLoading = ref(false);
 
 // [변경] 현재 쿼리 파라미터를 기반으로 백엔드 API URL 생성
 const buildPostsUrl = () => {
   const params = new URLSearchParams();
-  if (route.query.region) params.set('region', route.query.region);
-  if (route.query.category) params.set('category', route.query.category);
-  if (route.query.location_id) params.set('location_id', route.query.location_id);
+  if (route.query.region) params.set("region", route.query.region);
+  if (route.query.category) params.set("category", route.query.category);
+  if (route.query.location_id)
+    params.set("location_id", route.query.location_id);
   const url = `${API_BASE_URL}/api/posts?${params.toString()}`;
-  console.debug('Fetching posts URL:', url);
+  console.debug("Fetching posts URL:", url);
   return url;
 };
 
 // 유틸: 카카오맵 링크 생성 (템플릿에서 호출됨 — 반드시 정의 필요)
 const buildKakaoMapLink = (location) => {
-  if (!location) return '#';
+  if (!location) return "#";
   const lat = location.mapy || location.lat || location.y || null;
   const lng = location.mapx || location.lng || location.x || null;
-  const title = location.name || location.title || '';
-  if (lat == null || lng == null) return '#';
+  const title = location.name || location.title || "";
+  if (lat == null || lng == null) return "#";
   // format: https://map.kakao.com/link/map/{title},{lat},{lng}
   return `https://map.kakao.com/link/map/${encodeURIComponent(title)},${lat},${lng}`;
 };
 
 const fetchPosts = async () => {
   isLoading.value = true;
-  errorMessage.value = '';
+  errorMessage.value = "";
   try {
     const response = await fetch(buildPostsUrl());
     if (!response.ok) {
-      throw new Error('게시글 목록을 불러오지 못했습니다.');
+      throw new Error("게시글 목록을 불러오지 못했습니다.");
     }
     posts.value = await response.json();
   } catch (error) {
     console.error(error);
-    errorMessage.value = '게시글 목록 조회에 실패했습니다. 잠시 후 다시 시도해 주세요.';
+    errorMessage.value =
+      "게시글 목록 조회에 실패했습니다. 잠시 후 다시 시도해 주세요.";
   } finally {
     isLoading.value = false;
   }
 };
 
 // Simple toast
-const toast = ref({ message: '', type: '', visible: false });
-function showToast(message, type = 'info', ms = 3000) {
+const toast = ref({ message: "", type: "", visible: false });
+function showToast(message, type = "info", ms = 3000) {
   toast.value = { message, type, visible: true };
   setTimeout(() => {
     toast.value.visible = false;
   }, ms);
 }
 
-const ratingFailureModal = ref({ visible: false, message: '' });
+const ratingFailureModal = ref({ visible: false, message: "" });
 
 function showRatingFailure(message) {
   ratingFailureModal.value = { visible: true, message };
 }
 
 function closeRatingFailure() {
-  ratingFailureModal.value = { visible: false, message: '' };
+  ratingFailureModal.value = { visible: false, message: "" };
 }
 
 // [추가] 쿼리 파라미터에 location_id가 있을 때, 또는 선택된 명소의 상세 정보를 가져오는 함수
-const fetchSelectedLocationInfo = async (id, target = 'filter') => {
+const fetchSelectedLocationInfo = async (id, target = "filter") => {
   try {
     const response = await fetch(`${API_BASE_URL}/api/locations/${id}`);
     if (response.ok) {
       const data = await response.json();
-      if (target === 'create') {
+      if (target === "create") {
         selectedNewLocation.value = data;
       } else {
         selectedFilterLocation.value = data;
       }
     }
   } catch (error) {
-    console.error('명소 정보를 불러오지 못했습니다:', error);
+    console.error("명소 정보를 불러오지 못했습니다:", error);
   }
 };
 
@@ -230,12 +260,12 @@ const updateFilterRoute = () => {
 
 // [변경] 명소 선택 시, 메모리를 거치지 않고 바로 URL의 쿼리를 변경하도록 수정
 const selectLocation = (location) => {
-  if (locationModalScope.value === 'create') {
+  if (locationModalScope.value === "create") {
     newRegion.value = location.region;
     newLocationId.value = String(location.id);
-    newThumbnailUrl.value = location.image_url || '';
+    newThumbnailUrl.value = location.image_url || "";
     // fetch full details for the selected new location so rating info is available
-    fetchSelectedLocationInfo(location.id, 'create');
+    fetchSelectedLocationInfo(location.id, "create");
   } else {
     filterRegion.value = location.region;
     filterLocationId.value = String(location.id);
@@ -247,14 +277,14 @@ const selectLocation = (location) => {
 
 // [변경] 선택 해제 시에도 라우터를 거치도록 수정
 const clearSelectedLocation = (scope) => {
-  if (scope === 'create') {
-    newLocationId.value = '';
-    newThumbnailUrl.value = '';
+  if (scope === "create") {
+    newLocationId.value = "";
+    newThumbnailUrl.value = "";
     selectedNewLocation.value = null;
     return;
   }
 
-  filterLocationId.value = '';
+  filterLocationId.value = "";
   selectedFilterLocation.value = null;
   updateFilterRoute(); // URL 업데이트
 };
@@ -263,12 +293,17 @@ const clearSelectedLocation = (scope) => {
 watch(
   () => route.query,
   async (newQuery) => {
-    filterRegion.value = newQuery.region || '';
-    filterCategory.value = newQuery.category || '';
-    filterLocationId.value = newQuery.location_id || '';
+    filterRegion.value = newQuery.region || "";
+    filterCategory.value = newQuery.category || "";
+    filterLocationId.value = newQuery.location_id || "";
 
     // URL에 location_id는 있는데 상세 정보 오브젝트가 매핑되어 있지 않다면 백엔드에서 조회
-    if (newQuery.location_id && (!selectedFilterLocation.value || String(selectedFilterLocation.value.id) !== String(newQuery.location_id))) {
+    if (
+      newQuery.location_id &&
+      (!selectedFilterLocation.value ||
+        String(selectedFilterLocation.value.id) !==
+          String(newQuery.location_id))
+    ) {
       await fetchSelectedLocationInfo(newQuery.location_id);
     } else if (!newQuery.location_id) {
       selectedFilterLocation.value = null;
@@ -276,14 +311,14 @@ watch(
 
     await fetchPosts();
   },
-  { deep: true }
+  { deep: true },
 );
 
 // [변경] 온마운트 시점에는 현재 주소창의 쿼리를 먼저 메모리에 대입한 뒤 데이터 페칭 수행
 onMounted(async () => {
-  filterRegion.value = route.query.region || '';
-  filterCategory.value = route.query.category || '';
-  filterLocationId.value = route.query.location_id || '';
+  filterRegion.value = route.query.region || "";
+  filterCategory.value = route.query.category || "";
+  filterLocationId.value = route.query.location_id || "";
 
   if (filterLocationId.value) {
     await fetchSelectedLocationInfo(filterLocationId.value);
@@ -296,26 +331,26 @@ const filteredLocations = computed(() => {
   const keyword = locationSearchKeyword.value.trim().toLowerCase();
   if (!keyword) return loadedLocations.value;
   return loadedLocations.value.filter((location) => {
-    const name = String(location?.name || '').toLowerCase();
-    const address = String(location?.address || '').toLowerCase();
+    const name = String(location?.name || "").toLowerCase();
+    const address = String(location?.address || "").toLowerCase();
     return name.includes(keyword) || address.includes(keyword);
   });
 });
 
 const resetModalLocations = () => {
   loadedLocations.value = [];
-  locationSearchKeyword.value = '';
+  locationSearchKeyword.value = "";
 };
 
 const openLocationModal = (scope) => {
   locationModalScope.value = scope;
   isLocationModalOpen.value = true;
-  if (scope === 'create') {
-    locationSearchRegion.value = newRegion.value || '';
+  if (scope === "create") {
+    locationSearchRegion.value = newRegion.value || "";
   } else {
-    locationSearchRegion.value = filterRegion.value || '';
+    locationSearchRegion.value = filterRegion.value || "";
   }
-  locationSearchCategory.value = '';
+  locationSearchCategory.value = "";
   resetModalLocations();
 };
 
@@ -326,7 +361,7 @@ const closeLocationModal = () => {
 
 const loadLocationsByRegionAndCategory = async () => {
   if (!locationSearchRegion.value || !locationSearchCategory.value) {
-    alert('권역과 카테고리를 먼저 선택해주세요.');
+    alert("권역과 카테고리를 먼저 선택해주세요.");
     return;
   }
   try {
@@ -335,16 +370,18 @@ const loadLocationsByRegionAndCategory = async () => {
     const params = new URLSearchParams({
       region: locationSearchRegion.value,
       category: locationSearchCategory.value,
-      limit: '100',
-      offset: '0',
+      limit: "100",
+      offset: "0",
     });
-    const response = await fetch(`${API_BASE_URL}/api/locations?${params.toString()}`);
-    if (!response.ok) throw new Error('명소 목록을 불러오지 못했습니다.');
+    const response = await fetch(
+      `${API_BASE_URL}/api/locations?${params.toString()}`,
+    );
+    if (!response.ok) throw new Error("명소 목록을 불러오지 못했습니다.");
     const result = await response.json();
     loadedLocations.value = Array.isArray(result) ? result : [];
   } catch (error) {
     console.error(error);
-    alert(error.message || '명소 목록 조회에 실패했습니다.');
+    alert(error.message || "명소 목록 조회에 실패했습니다.");
   } finally {
     isLocationLoading.value = false;
   }
@@ -353,8 +390,8 @@ const loadLocationsByRegionAndCategory = async () => {
 watch(newRegion, (nextRegion) => {
   if (!selectedNewLocation.value) return;
   if (selectedNewLocation.value.region !== nextRegion) {
-    newLocationId.value = '';
-    newThumbnailUrl.value = '';
+    newLocationId.value = "";
+    newThumbnailUrl.value = "";
     selectedNewLocation.value = null;
   }
 });
@@ -362,19 +399,24 @@ watch(newRegion, (nextRegion) => {
 watch(filterRegion, (nextRegion) => {
   if (!selectedFilterLocation.value) return;
   if (selectedFilterLocation.value.region !== nextRegion) {
-    filterLocationId.value = '';
+    filterLocationId.value = "";
     selectedFilterLocation.value = null;
   }
 });
 
 const addPost = async () => {
   if (isSubmitting.value) return;
-  if (!newTitle.value || !newRegion.value || !newContent.value || !newPassword.value) {
-    alert('카테고리, 제목, 지역, 본문, 비밀번호를 모두 입력해주세요!');
+  if (
+    !newTitle.value ||
+    !newRegion.value ||
+    !newContent.value ||
+    !newPassword.value
+  ) {
+    alert("카테고리, 제목, 지역, 본문, 비밀번호를 모두 입력해주세요!");
     return;
   }
   if (!regionOptions.includes(newRegion.value)) {
-    alert('지역은 지정된 5개 권역 중에서 선택해야 합니다.');
+    alert("지역은 지정된 5개 권역 중에서 선택해야 합니다.");
     return;
   }
   const payload = {
@@ -382,7 +424,7 @@ const addPost = async () => {
     content: newContent.value.trim(),
     password: newPassword.value,
     category: selectedCategory.value,
-    region: newRegion.value
+    region: newRegion.value,
   };
   if (newLocationId.value.trim()) {
     payload.location_id = Number(newLocationId.value.trim());
@@ -392,45 +434,61 @@ const addPost = async () => {
     isSubmitting.value = true;
     // If this is a review ('후기') and user selected a location and provided a rating,
     // submit the rating first to the locations ratings API. If it fails, abort post creation.
-    if (selectedCategory.value === '후기' && newLocationId.value && rating.value > 0) {
-      const ok = await submitRatingForLocation(String(newLocationId.value), rating.value);
+    if (
+      selectedCategory.value === "후기" &&
+      newLocationId.value &&
+      rating.value > 0
+    ) {
+      const ok = await submitRatingForLocation(
+        String(newLocationId.value),
+        rating.value,
+      );
       if (!ok) {
-        throw new Error('별점 등록 실패로 게시글 등록이 취소되었습니다.');
+        throw new Error("별점 등록 실패로 게시글 등록이 취소되었습니다.");
       }
       // include rating in post payload as well
       payload.rating = rating.value;
     }
 
-    console.debug('Post payload:', payload);
-    if (selectedCategory.value === '후기' && rating.value > 0 && payload.rating == null) {
-      console.warn('Expected rating to be present in payload but it is missing', { selectedCategory: selectedCategory.value, rating: rating.value });
-      showToast('별점이 포함되지 않았습니다 (디버그).', 'error');
+    console.debug("Post payload:", payload);
+    if (
+      selectedCategory.value === "후기" &&
+      rating.value > 0 &&
+      payload.rating == null
+    ) {
+      console.warn(
+        "Expected rating to be present in payload but it is missing",
+        { selectedCategory: selectedCategory.value, rating: rating.value },
+      );
+      showToast("별점이 포함되지 않았습니다 (디버그).", "error");
     }
     const response = await fetch(`${API_BASE_URL}/api/posts`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({}));
-      throw new Error(String(errorBody?.detail || '게시글 등록에 실패했습니다.'));
+      throw new Error(
+        String(errorBody?.detail || "게시글 등록에 실패했습니다."),
+      );
     }
     await fetchPosts();
   } catch (error) {
     console.error(error);
-    alert(error.message || '게시글 등록에 실패했습니다.');
+    alert(error.message || "게시글 등록에 실패했습니다.");
     return;
   } finally {
     isSubmitting.value = false;
   }
-  newTitle.value = '';
-  newRegion.value = '';
-  newContent.value = '';
-  newLocationId.value = '';
-  newThumbnailUrl.value = '';
+  newTitle.value = "";
+  newRegion.value = "";
+  newContent.value = "";
+  newLocationId.value = "";
+  newThumbnailUrl.value = "";
   selectedNewLocation.value = null;
-  newPassword.value = '';
-  selectedCategory.value = '잡담';
+  newPassword.value = "";
+  selectedCategory.value = "잡담";
   isFormOpen.value = false;
 };
 
@@ -455,8 +513,8 @@ const goToDetail = (id) => {
           <div class="form-item">
             <label>카테고리</label>
             <div class="category-selector">
-              <button 
-                v-for="cat in categoryOptions" 
+              <button
+                v-for="cat in categoryOptions"
                 :key="cat"
                 type="button"
                 :class="['category-btn', { active: selectedCategory === cat }]"
@@ -480,14 +538,24 @@ const goToDetail = (id) => {
             <label>지역 위치</label>
             <select v-model="newRegion">
               <option value="" disabled>권역을 선택하세요</option>
-              <option v-for="region in regionOptions" :key="region" :value="region">{{ region }}</option>
+              <option
+                v-for="region in regionOptions"
+                :key="region"
+                :value="region"
+              >
+                {{ region }}
+              </option>
             </select>
           </div>
 
           <div class="form-item">
             <label>연결할 명소 <span class="sub-label">(선택값)</span></label>
             <div class="location-picker-row">
-              <button type="button" class="btn-location-picker" @click="openLocationModal('create')">
+              <button
+                type="button"
+                class="btn-location-picker"
+                @click="openLocationModal('create')"
+              >
                 권역/카테고리로 명소 찾기
               </button>
               <button
@@ -501,8 +569,13 @@ const goToDetail = (id) => {
             </div>
             <div v-if="selectedNewLocation" class="selected-location-card">
               <strong>{{ selectedNewLocation.name }}</strong>
-              <span>{{ selectedNewLocation.region }} · {{ selectedNewLocation.category }}</span>
-              <small>{{ selectedNewLocation.address || '주소 정보 없음' }}</small>
+              <span
+                >{{ selectedNewLocation.region }} ·
+                {{ selectedNewLocation.category }}</span
+              >
+              <small>{{
+                selectedNewLocation.address || "주소 정보 없음"
+              }}</small>
               <a
                 class="location-link"
                 :href="buildKakaoMapLink(selectedNewLocation)"
@@ -513,7 +586,10 @@ const goToDetail = (id) => {
               </a>
             </div>
 
-            <div v-if="selectedNewLocation && selectedCategory === '후기'" class="form-item rating-item">
+            <div
+              v-if="selectedNewLocation && selectedCategory === '후기'"
+              class="form-item rating-item"
+            >
               <label>별점 남기기</label>
               <div class="star-rating" role="radiogroup" aria-label="별점">
                 <span
@@ -528,14 +604,19 @@ const goToDetail = (id) => {
                   ★
                 </span>
               </div>
-              <div v-if="ratingErrorMessage" class="rating-error">{{ ratingErrorMessage }}</div>
+              <div v-if="ratingErrorMessage" class="rating-error">
+                {{ ratingErrorMessage }}
+              </div>
             </div>
             <!-- <p v-else class="sub-label">명소를 선택하지 않아도 게시글 등록이 가능합니다.</p> -->
           </div>
 
           <div class="form-item">
             <label>이야기 본문</label>
-            <textarea v-model="newContent" placeholder="꿀팁이나 생각을 자유롭게 들려주세요."></textarea>
+            <textarea
+              v-model="newContent"
+              placeholder="꿀팁이나 생각을 자유롭게 들려주세요."
+            ></textarea>
           </div>
 
           <div class="form-item">
@@ -552,8 +633,12 @@ const goToDetail = (id) => {
           </div>
         </div>
 
-        <button class="btn-submit-airbnb" :disabled="isSubmitting" @click="addPost">
-          {{ isSubmitting ? '등록 중...' : '이야기 등록하기' }}
+        <button
+          class="btn-submit-airbnb"
+          :disabled="isSubmitting"
+          @click="addPost"
+        >
+          {{ isSubmitting ? "등록 중..." : "이야기 등록하기" }}
         </button>
       </div>
     </section>
@@ -564,15 +649,23 @@ const goToDetail = (id) => {
       <div class="filter-toolbar">
         <select v-model="filterRegion" @change="fetchPosts">
           <option value="">전체 권역</option>
-          <option v-for="region in regionOptions" :key="region" :value="region">{{ region }}</option>
+          <option v-for="region in regionOptions" :key="region" :value="region">
+            {{ region }}
+          </option>
         </select>
 
         <select v-model="filterCategory" @change="fetchPosts">
           <option value="">전체 카테고리</option>
-          <option v-for="cat in categoryOptions" :key="cat" :value="cat">{{ cat }}</option>
+          <option v-for="cat in categoryOptions" :key="cat" :value="cat">
+            {{ cat }}
+          </option>
         </select>
 
-        <button type="button" class="btn-location-picker" @click="openLocationModal('filter')">
+        <button
+          type="button"
+          class="btn-location-picker"
+          @click="openLocationModal('filter')"
+        >
           명소 조건 선택
         </button>
 
@@ -585,19 +678,48 @@ const goToDetail = (id) => {
           명소 조건 해제
         </button>
 
-        <button type="button" class="btn-refresh" @click="fetchPosts">검색</button>
+        <button type="button" class="btn-refresh" @click="fetchPosts">
+          검색
+        </button>
       </div>
 
-      <div v-if="selectedFilterLocation" class="selected-location-card filter-card">
+      <div
+        v-if="selectedFilterLocation"
+        class="selected-location-card filter-card"
+      >
         <strong>명소 조건: {{ selectedFilterLocation.name }}</strong>
-        <span>{{ selectedFilterLocation.region }} · {{ selectedFilterLocation.category }}</span>
-        <div class="selected-rating" v-if="selectedFilterLocation.rating_avg || selectedFilterLocation.rating_count">
+        <span
+          >{{ selectedFilterLocation.region }} ·
+          {{ selectedFilterLocation.category }}</span
+        >
+        <div
+          class="selected-rating"
+          v-if="
+            selectedFilterLocation.rating_avg ||
+            selectedFilterLocation.rating_count
+          "
+        >
           <span class="loc-stars-inline">
-            <span v-for="i in 5" :key="i" class="loc-star" :class="{ filled: i <= Math.round(selectedFilterLocation.rating_avg || 0) }">★</span>
+            <span
+              v-for="i in 5"
+              :key="i"
+              class="loc-star"
+              :class="{
+                filled: i <= Math.round(selectedFilterLocation.rating_avg || 0),
+              }"
+              >★</span
+            >
           </span>
-          <small class="rating-text">{{ selectedFilterLocation.rating_avg ? Number(selectedFilterLocation.rating_avg).toFixed(1) : '-' }} ({{ selectedFilterLocation.rating_count || 0 }})</small>
+          <small class="rating-text"
+            >{{
+              selectedFilterLocation.rating_avg
+                ? Number(selectedFilterLocation.rating_avg).toFixed(1)
+                : "-"
+            }}
+            ({{ selectedFilterLocation.rating_count || 0 }})</small
+          >
         </div>
-        <small>{{ selectedFilterLocation.address || '주소 정보 없음' }}</small>
+        <small>{{ selectedFilterLocation.address || "주소 정보 없음" }}</small>
         <a
           class="location-link"
           :href="buildKakaoMapLink(selectedFilterLocation)"
@@ -610,14 +732,37 @@ const goToDetail = (id) => {
 
       <div v-if="selectedNewLocation" class="selected-location-card">
         <strong>{{ selectedNewLocation.name }}</strong>
-        <span>{{ selectedNewLocation.region }} · {{ selectedNewLocation.category }}</span>
-        <div class="selected-rating" v-if="selectedNewLocation.rating_avg || selectedNewLocation.rating_count">
+        <span
+          >{{ selectedNewLocation.region }} ·
+          {{ selectedNewLocation.category }}</span
+        >
+        <div
+          class="selected-rating"
+          v-if="
+            selectedNewLocation.rating_avg || selectedNewLocation.rating_count
+          "
+        >
           <span class="loc-stars-inline">
-            <span v-for="i in 5" :key="i" class="loc-star" :class="{ filled: i <= Math.round(selectedNewLocation.rating_avg || 0) }">★</span>
+            <span
+              v-for="i in 5"
+              :key="i"
+              class="loc-star"
+              :class="{
+                filled: i <= Math.round(selectedNewLocation.rating_avg || 0),
+              }"
+              >★</span
+            >
           </span>
-          <small class="rating-text">{{ selectedNewLocation.rating_avg ? Number(selectedNewLocation.rating_avg).toFixed(1) : '-' }} ({{ selectedNewLocation.rating_count || 0 }})</small>
+          <small class="rating-text"
+            >{{
+              selectedNewLocation.rating_avg
+                ? Number(selectedNewLocation.rating_avg).toFixed(1)
+                : "-"
+            }}
+            ({{ selectedNewLocation.rating_count || 0 }})</small
+          >
         </div>
-        <small>{{ selectedNewLocation.address || '주소 정보 없음' }}</small>
+        <small>{{ selectedNewLocation.address || "주소 정보 없음" }}</small>
         <a
           class="location-link"
           :href="buildKakaoMapLink(selectedNewLocation)"
@@ -630,60 +775,117 @@ const goToDetail = (id) => {
 
       <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
       <p v-if="isLoading" class="state-text">게시글을 불러오는 중입니다...</p>
-      <p v-else-if="posts.length === 0" class="state-text">조건에 맞는 게시글이 없습니다.</p>
-      
+      <p v-else-if="posts.length === 0" class="state-text">
+        조건에 맞는 게시글이 없습니다.
+      </p>
+
       <div class="grid-container">
-          <div v-for="post in posts" :key="post.id" class="post-card" @click="goToDetail(post.id)">
-            <div
-              class="card-image-field"
-              :class="{ 'with-thumb': !!post.thumbnail_url }"
-              :style="post.thumbnail_url ? { backgroundImage: `url(${post.thumbnail_url})` } : {}"
-            >
+        <div
+          v-for="post in posts"
+          :key="post.id"
+          class="post-card"
+          @click="goToDetail(post.id)"
+        >
+          <div
+            class="card-image-field"
+            :class="{ 'with-thumb': !!post.thumbnail_url }"
+            :style="
+              post.thumbnail_url
+                ? { backgroundImage: `url(${post.thumbnail_url})` }
+                : {}
+            "
+          >
             <span class="category-badge">{{ post.category }}</span>
-            <span class="location-badge">{{ post.region || '지역 미지정' }}</span>
+            <span class="location-badge">{{
+              post.region || "지역 미지정"
+            }}</span>
           </div>
 
           <div class="card-content">
             <div v-if="post.category === '후기'" class="post-rating">
               <span class="post-stars">
-                <span v-for="i in 5" :key="i" class="loc-star" :class="{ filled: i <= Math.round(post.rating || 0) }">★</span>
+                <span
+                  v-for="i in 5"
+                  :key="i"
+                  class="loc-star"
+                  :class="{ filled: i <= Math.round(post.rating || 0) }"
+                  >★</span
+                >
               </span>
-              <span class="rating-text">{{ post.rating ? Number(post.rating).toFixed(1) : '-' }}</span>
+              <span class="rating-text">{{
+                post.rating ? Number(post.rating).toFixed(1) : "-"
+              }}</span>
             </div>
             <h3 class="card-title">{{ post.title }}</h3>
-            <p class="card-desc">{{ post.content.slice(0, 25) }}{{ post.content.length > 25 ? '...' : '' }}</p>
-            
+            <p class="card-desc">
+              {{ post.content.slice(0, 25)
+              }}{{ post.content.length > 25 ? "..." : "" }}
+            </p>
+
             <div class="card-footer">
               <span class="view-detail-text">클릭하여 상세 보기</span>
-              <span class="comments-count" aria-hidden="true">💬 {{ post.comments_count ?? 0 }}</span>
+              <span class="comments-count" aria-hidden="true"
+                >💬 {{ post.comments_count ?? 0 }}</span
+              >
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <div v-if="isLocationModalOpen" class="location-modal-overlay" @click.self="closeLocationModal">
+    <div
+      v-if="isLocationModalOpen"
+      class="location-modal-overlay"
+      @click.self="closeLocationModal"
+    >
       <div class="location-modal">
         <div class="location-modal-header">
           <h3>명소 검색</h3>
-          <button type="button" class="btn-close-modal" :disabled="isLocationLoading" @click="closeLocationModal">닫기</button>
+          <button
+            type="button"
+            class="btn-close-modal"
+            :disabled="isLocationLoading"
+            @click="closeLocationModal"
+          >
+            닫기
+          </button>
         </div>
 
-        <p class="sub-label">권역과 카테고리를 선택해 목록을 불러온 뒤, 키워드로 빠르게 찾을 수 있어요.</p>
+        <p class="sub-label">
+          권역과 카테고리를 선택해 목록을 불러온 뒤, 키워드로 빠르게 찾을 수
+          있어요.
+        </p>
 
         <div class="location-modal-controls">
           <select v-model="locationSearchRegion">
             <option value="" disabled>권역 선택</option>
-            <option v-for="region in regionOptions" :key="region" :value="region">{{ region }}</option>
+            <option
+              v-for="region in regionOptions"
+              :key="region"
+              :value="region"
+            >
+              {{ region }}
+            </option>
           </select>
 
           <select v-model="locationSearchCategory">
             <option value="" disabled>카테고리 선택</option>
-            <option v-for="cat in locationCategoryOptions" :key="cat" :value="cat">{{ cat }}</option>
+            <option
+              v-for="cat in locationCategoryOptions"
+              :key="cat"
+              :value="cat"
+            >
+              {{ cat }}
+            </option>
           </select>
 
-          <button type="button" class="btn-refresh" :disabled="isLocationLoading" @click="loadLocationsByRegionAndCategory">
-            {{ isLocationLoading ? '불러오는 중...' : '목록 불러오기' }}
+          <button
+            type="button"
+            class="btn-refresh"
+            :disabled="isLocationLoading"
+            @click="loadLocationsByRegionAndCategory"
+          >
+            {{ isLocationLoading ? "불러오는 중..." : "목록 불러오기" }}
           </button>
         </div>
 
@@ -695,9 +897,15 @@ const goToDetail = (id) => {
           />
         </div>
 
-        <p v-if="isLocationLoading" class="state-text">명소 목록을 조회 중입니다...</p>
-        <p v-else-if="loadedLocations.length === 0" class="state-text">먼저 권역/카테고리를 선택하고 목록을 불러와 주세요.</p>
-        <p v-else-if="filteredLocations.length === 0" class="state-text">검색 결과가 없습니다.</p>
+        <p v-if="isLocationLoading" class="state-text">
+          명소 목록을 조회 중입니다...
+        </p>
+        <p v-else-if="loadedLocations.length === 0" class="state-text">
+          먼저 권역/카테고리를 선택하고 목록을 불러와 주세요.
+        </p>
+        <p v-else-if="filteredLocations.length === 0" class="state-text">
+          검색 결과가 없습니다.
+        </p>
 
         <ul v-else class="location-results">
           <li
@@ -711,26 +919,57 @@ const goToDetail = (id) => {
               <span>{{ location.region }} · {{ location.category }}</span>
               <div class="location-rating-inline">
                 <span class="loc-stars">
-                  <span v-for="i in 5" :key="i" class="loc-star" :class="{ filled: i <= Math.round(location.rating_avg || 0) }">★</span>
+                  <span
+                    v-for="i in 5"
+                    :key="i"
+                    class="loc-star"
+                    :class="{
+                      filled: i <= Math.round(location.rating_avg || 0),
+                    }"
+                    >★</span
+                  >
                 </span>
-                <small class="rating-text">{{ location.rating_avg ? Number(location.rating_avg).toFixed(1) : '-' }} ({{ location.rating_count || 0 }})</small>
+                <small class="rating-text"
+                  >{{
+                    location.rating_avg
+                      ? Number(location.rating_avg).toFixed(1)
+                      : "-"
+                  }}
+                  ({{ location.rating_count || 0 }})</small
+                >
               </div>
             </div>
-            <small>{{ location.address || '주소 정보 없음' }}</small>
+            <small>{{ location.address || "주소 정보 없음" }}</small>
           </li>
         </ul>
       </div>
     </div>
-    <div v-if="ratingFailureModal.visible" class="modal-overlay" @click.self="closeRatingFailure">
+    <div
+      v-if="ratingFailureModal.visible"
+      class="modal-overlay"
+      @click.self="closeRatingFailure"
+    >
       <div class="modal">
         <h3>별점 등록 실패</h3>
         <p>{{ ratingFailureModal.message }}</p>
-        <div class="modal-actions" style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
-          <button class="btn-secondary" @click="closeRatingFailure">닫기</button>
+        <div
+          class="modal-actions"
+          style="
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 12px;
+          "
+        >
+          <button class="btn-secondary" @click="closeRatingFailure">
+            닫기
+          </button>
         </div>
       </div>
     </div>
-    <div v-if="toast.visible" :class="['toast', toast.type]">{{ toast.message }}</div>
+    <div v-if="toast.visible" :class="['toast', toast.type]">
+      {{ toast.message }}
+    </div>
   </div>
 </template>
 
@@ -845,10 +1084,12 @@ const goToDetail = (id) => {
   background-color: white;
   color: var(--color-airbnb-dark);
   border-color: #333;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
-.form-item input, .form-item textarea, .form-item select {
+.form-item input,
+.form-item textarea,
+.form-item select {
   border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 12px 14px;
@@ -858,7 +1099,9 @@ const goToDetail = (id) => {
   transition: border-color 0.2s;
 }
 
-.form-item input:focus, .form-item textarea:focus, .form-item select:focus {
+.form-item input:focus,
+.form-item textarea:focus,
+.form-item select:focus {
   border-color: var(--color-airbnb-red);
 }
 
@@ -938,14 +1181,16 @@ const goToDetail = (id) => {
   color: #dcdcdc;
   cursor: pointer;
   user-select: none;
-  transition: color 0.12s ease-in-out, transform 0.08s ease;
+  transition:
+    color 0.12s ease-in-out,
+    transform 0.08s ease;
 }
 .rating-item .star:hover {
   transform: scale(1.08);
 }
 .rating-item .star.filled {
-  color: #FFD54A; /* 밝은 노란색 */
-  text-shadow: 0 1px 0 rgba(0,0,0,0.1);
+  color: #ffd54a; /* 밝은 노란색 */
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
 }
 
 .rating-error {
@@ -960,16 +1205,31 @@ const goToDetail = (id) => {
   align-items: center;
   gap: 8px;
 }
-.location-rating-inline { display:flex; align-items:center; gap:6px; }
-.loc-stars { display:flex; gap:4px; }
-.loc-star { color: #dcdcdc; font-size:1rem; }
-.loc-star.filled { color: #FFD54A; }
-.rating-text { color: var(--color-airbnb-gray); font-size:0.85rem; }
+.location-rating-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.loc-stars {
+  display: flex;
+  gap: 4px;
+}
+.loc-star {
+  color: #dcdcdc;
+  font-size: 1rem;
+}
+.loc-star.filled {
+  color: #ffd54a;
+}
+.rating-text {
+  color: var(--color-airbnb-gray);
+  font-size: 0.85rem;
+}
 
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.45);
+  background: rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -981,13 +1241,28 @@ const goToDetail = (id) => {
   border-radius: 12px;
   padding: 16px;
   border: 1px solid var(--color-border);
-  box-shadow: 0 12px 30px rgba(0,0,0,0.2);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
 }
-.modal h3 { margin: 0 0 8px; }
-.modal p { margin: 0; color: var(--color-airbnb-gray); }
+.modal h3 {
+  margin: 0 0 8px;
+}
+.modal p {
+  margin: 0;
+  color: var(--color-airbnb-gray);
+}
 
-.loc-stars-inline { display:flex; gap:6px; margin-left:6px; align-items:center }
-.selected-rating { display:flex; align-items:center; gap:8px; margin-top:6px; }
+.loc-stars-inline {
+  display: flex;
+  gap: 6px;
+  margin-left: 6px;
+  align-items: center;
+}
+.selected-rating {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
 
 /* toast */
 .toast {
@@ -995,13 +1270,17 @@ const goToDetail = (id) => {
   right: 18px;
   bottom: 18px;
   padding: 12px 16px;
-  background: rgba(0,0,0,0.85);
+  background: rgba(0, 0, 0, 0.85);
   color: white;
   border-radius: 8px;
   z-index: 9999;
 }
-.toast.success { background: #16a34a; }
-.toast.error { background: #b42318; }
+.toast.success {
+  background: #16a34a;
+}
+.toast.error {
+  background: #b42318;
+}
 
 .location-link-row {
   margin-top: 6px;
@@ -1122,17 +1401,17 @@ const goToDetail = (id) => {
   }
   .location-link {
     align-self: flex-end;
-    margin-right:4px;
+    margin-right: 4px;
   }
 }
 @media (max-width: 600px) {
   .grid-container {
     grid-template-columns: 1fr;
   }
-  
+
   .location-link {
     align-self: flex-end;
-    margin-right:4px;
+    margin-right: 4px;
   }
 }
 
@@ -1148,20 +1427,36 @@ const goToDetail = (id) => {
   position: relative;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .post-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 24px rgba(0,0,0,0.1);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
   border-color: #2f2f2f;
 }
 
-.post-rating { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
-.post-stars { display:flex; gap:4px; }
-.post-stars .loc-star { color:#dcdcdc; font-size:0.95rem; }
-.post-stars .loc-star.filled { color:#FFD54A; }
-.post-card .rating-text { color: var(--color-airbnb-gray); font-size:0.85rem; }
+.post-rating {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.post-stars {
+  display: flex;
+  gap: 4px;
+}
+.post-stars .loc-star {
+  color: #dcdcdc;
+  font-size: 0.95rem;
+}
+.post-stars .loc-star.filled {
+  color: #ffd54a;
+}
+.post-card .rating-text {
+  color: var(--color-airbnb-gray);
+  font-size: 0.85rem;
+}
 
 .comments-count {
   margin-left: 12px;
@@ -1171,7 +1466,7 @@ const goToDetail = (id) => {
 
 .card-image-field {
   height: 160px;
-  background-color: #EBEBEB;
+  background-color: #ebebeb;
   background-position: center;
   background-size: cover;
   background-repeat: no-repeat;
@@ -1184,7 +1479,7 @@ const goToDetail = (id) => {
 }
 
 .card-image-field.with-thumb::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.05));
